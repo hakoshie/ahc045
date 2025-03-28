@@ -7,7 +7,7 @@
 
 using namespace std;
 
-bool local = true;
+bool local = false;
 
 vector<pair<int, int>> query(const vector<int>& c) {
     if (local) {
