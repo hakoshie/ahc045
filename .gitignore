@@ -1,2 +1,4 @@
 *.zip
 a.out
+output.txt
+input.txt
