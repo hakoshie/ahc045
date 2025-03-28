@@ -1,4 +1,4 @@
-# from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans
 import numpy as np
 local=True
 def query(c):
@@ -29,48 +29,25 @@ for _ in range(N):
 # use center of rectangle
 x = [(l + r) // 2 for l, r in zip(lx, rx)]
 y = [(l + r) // 2 for l, r in zip(ly, ry)]
-id = [i for i in range(N)]
-points_xy=np.array(list(zip(x, y)))
-points = np.array(list(zip(x, y, id)))
+points = np.array(list(zip(x, y)))
 
-groups = []
-for i in range(M):
-    groups.append([])
-    # select a random point from points
-    idx = np.random.randint(0, len(points))
-    groups[i].append(points[idx][2])
-    # remove the selected point from points
-    points = np.delete(points, idx, axis=0)
-    while len(groups[i]) < G[i]:
-    # add the selected point to the new points
-        min_dist = 1e9
-        min_idx = -1
-        for j in range(len(points)):
-            for gid in groups[i]:
-                dist = np.linalg.norm(points[j][:2] - points_xy[gid][:2])
-                if dist < min_dist:
-                    min_dist = dist
-                    min_idx = j
-        groups[i].append(points[min_idx][2])
-        points = np.delete(points, min_idx, axis=0)
-    
 # Perform initial clustering
-# kmeans = KMeans(n_clusters=max(int(M**.7),1), random_state=42, n_init="auto").fit(points)
-# labels = kmeans.labels_
+kmeans = KMeans(n_clusters=max(int(M**.7),1), random_state=42, n_init="auto").fit(points)
+labels = kmeans.labels_
 
 # Assign points to clusters
-# clusters = [[] for _ in range(M)]
-# for i, label in enumerate(labels):
-#     clusters[label].append(i)
+clusters = [[] for _ in range(M)]
+for i, label in enumerate(labels):
+    clusters[label].append(i)
 
 # Ensure each cluster matches the exact size of G
-# sorted_clusters = sorted(clusters, key=lambda c: len(c), reverse=True)
-# groups = []
-# remaining_cities = [city for cluster in sorted_clusters for city in cluster]
-# start_idx = 0
-# for g_size in G:
-#     groups.append(remaining_cities[start_idx:start_idx + g_size])
-#     start_idx += g_size
+sorted_clusters = sorted(clusters, key=lambda c: len(c), reverse=True)
+groups = []
+remaining_cities = [city for cluster in sorted_clusters for city in cluster]
+start_idx = 0
+for g_size in G:
+    groups.append(remaining_cities[start_idx:start_idx + g_size])
+    start_idx += g_size
 
 # Get edges from queries
 edges = [[] for _ in range(M)]

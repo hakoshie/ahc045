@@ -16,8 +16,10 @@ out_dir = "./pahcer"
 #         COMPILE STEPS
 # ==============================
 
-# You don't need to compile anything for Python
-compile_steps = []
+# Compile the user's program
+[[test.compile_steps]]
+program = "g++"
+args = ["-std=c++20", "-O2", "main.cpp"]
 
 # ==============================
 #           TEST STEPS
@@ -25,8 +27,8 @@ compile_steps = []
 
 # Run the user's program
 [[test.test_steps]]
-program = "python3"
-args = ["./main.py"]
+program = "./a.out"
+args = []
 stdin = "./tools/in/{SEED04}.txt"
 stdout = "./tools/out/{SEED04}.txt"
 stderr = "./tools/err/{SEED04}.txt"

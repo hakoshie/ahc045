@@ -1,131 +1,156 @@
 #include <iostream>
-#include <string>
 #include <vector>
-#include <stdio.h>
 #include <algorithm>
-#define _USE_MATH_DEFINES
 #include <cmath>
-#include <numeric>
-#include <iomanip>
-#include <deque>
-#include <tuple>
-#include <queue>
-#include <stack>
-#include <map>
-#include <set>
-#include <unordered_map>
-#include <sstream>
-#include <stdexcept>
-#include <boost/multiprecision/cpp_int.hpp>
-#include <boost/multiprecision/cpp_dec_float.hpp>
+#include <random>
+#include <tuple> // Include tuple header
 
-#define rep(i, x) for (int i = 0; i < (int)(x); i++)
-#define FOR(i, a, done) for (int i = (a); i < (done); ++i)
-#define all(a) (a).begin(), (a).end()
-#define x first
-#define y second
-#define debug(a) cout << (a) << endl
-namespace mp = boost::multiprecision;
-using cpp_int = mp::cpp_int;
-using ll = long long;
 using namespace std;
-template <class T>
-bool chmax(T &a, const T &b)
-{
-	if (a < b)
-	{
-		a = b;
-		return 1;
-	}
-	return 0;
-}
-template <class T>
-bool chmin(T &a, const T &b)
-{
-	if (a > b)
-	{
-		a = b;
-		return 1;
-	}
-	return 0;
-}
 
-const int N = 800, Q = 400;
-int M,L,W;
-vector<pair<int, int>> city_rect[N]; // 各都市の長方形範囲 (xmin, xmax), (ymin, ymax)
-vector<vector<tuple<int,int,int>>> mst_edges; // クエリで得たMSTの情報
+bool local = true;
 
-// クエリを実行して MST を取得する (仮の実装)
-vector<tuple<int, int, int>> query_mst(const vector<int>& cities) {
-    cout << "? " << cities.size();
-    for (int c : cities) cout << " " << c + 1;
+vector<pair<int, int>> query(const vector<int>& c) {
+    if (local) {
+        vector<pair<int, int>> result;
+        for (size_t i = 0; i < c.size() - 1; ++i) {
+            result.emplace_back(c[i], c[i + 1]);
+        }
+        return result;
+    }
+
+    cout << "? " << c.size();
+    for (int val : c) {
+        cout << " " << val;
+    }
     cout << endl;
-    
-    int num_edges;
-    cin >> num_edges;
-    vector<tuple<int, int, int>> mst;
-    for (int i = 0; i < num_edges; i++) {
-        int u, v, d;
-        cin >> u >> v >> d;
-        mst.emplace_back(u - 1, v - 1, d);
+
+    vector<pair<int, int>> result;
+    for (size_t i = 0; i < c.size() - 1; ++i) {
+        int a, b;
+        cin >> a >> b;
+        result.emplace_back(a, b);
     }
-    return mst;
+    return result;
 }
 
-// MST の情報を用いて都市の距離を推定
-void estimate_distances() {
-    for (int i = 0; i < Q; i++) {
-        vector<int> sample;
-        for (int j = 0; j < 10; j++) {
-            sample.push_back(rand() % N);
+void answer(const vector<vector<int>>& groups, const vector<vector<pair<int, int>>>& edges) {
+    cout << "!" << endl;
+    for (size_t i = 0; i < groups.size(); ++i) {
+        for (int val : groups[i]) {
+            cout << val << " ";
         }
-        auto mst = query_mst(sample);
-        mst_edges.push_back(mst);
-    }
-}
+        cout << endl;
 
-// 都市を M グループに分割 (クラスタリング)
-vector<vector<int>> cluster_cities() {
-    vector<vector<int>> clusters(M);
-    for (int i = 0; i < N; i++) {
-        clusters[i % M].push_back(i);
-    }
-    return clusters;
-}
-
-// グループごとに MST を作る
-vector<tuple<int, int>> construct_roads(const vector<vector<int>>& clusters) {
-    vector<tuple<int, int>> roads;
-    for (const auto& cluster : clusters) {
-        auto mst = query_mst(cluster);
-        for (auto [u, v, d] : mst) {
-            roads.emplace_back(u, v);
+        for (const auto& edge : edges[i]) {
+            cout << edge.first << " " << edge.second << endl;
         }
     }
-    return roads;
 }
 
-// メイン処理
 int main() {
-    int tN, tQ,W;
-    cin>>tN>>M>>tQ>>L>>W;
-    vector<int>G(M);
-    for (int i = 0; i < M; i++) {
+    int N, M, Q, L, W;
+    cin >> N >> M >> Q >> L >> W;
+
+    vector<int> G(M);
+    for (int i = 0; i < M; ++i) {
         cin >> G[i];
     }
-    for (int i = 0; i < N; i++) {
-        int xmin, xmax, ymin, ymax;
-        cin >> xmin >> xmax >> ymin >> ymax;
-        city_rect[i] = {{xmin, xmax}, {ymin, ymax}};
+
+    vector<int> lx(N), rx(N), ly(N), ry(N);
+    for (int i = 0; i < N; ++i) {
+        cin >> lx[i] >> rx[i] >> ly[i] >> ry[i];
     }
-    
-    estimate_distances();
-    auto clusters = cluster_cities();
-    auto roads = construct_roads(clusters);
-    
-    cout << "! " << roads.size() << endl;
-    for (auto [u, v] : roads) {
-        cout << u + 1 << " " << v + 1 << endl;
+
+    // Use center of rectangle
+    vector<int> x(N), y(N);
+    for (int i = 0; i < N; ++i) {
+        x[i] = (lx[i] + rx[i]) / 2;
+        y[i] = (ly[i] + ry[i]) / 2;
     }
+
+    vector<int> id(N);
+    for (int i = 0; i < N; ++i) {
+        id[i] = i;
+    }
+
+    vector<tuple<int, int, int>> points;
+    for (int i = 0; i < N; ++i) {
+        points.emplace_back(x[i], y[i], id[i]);
+    }
+
+    vector<vector<int>> groups(M);
+    vector<tuple<int, int>> points_xy(N); // use tuple<int,int> instead of tuple<int, int, int>
+    for(int i =0; i<N; i++){
+        points_xy[i] = make_tuple(x[i],y[i]);
+    }
+
+
+    
+    vector<tuple<int, int, int>> remaining_points = points;
+
+    for (int i = 0; i < M; ++i) {
+        // Select a random point from points
+        random_device rd;
+        mt19937 gen(rd());
+        uniform_int_distribution<> distrib(0, (int)remaining_points.size() - 1); // cast size() to int
+        int idx = distrib(gen);
+        
+        groups[i].push_back(get<2>(remaining_points[idx]));
+
+        // Remove the selected point from points
+        remaining_points.erase(remaining_points.begin() + idx);
+
+        while (groups[i].size() < (size_t)G[i]) { // cast G[i] to size_t for comparison
+            double min_dist = 1e9;
+            int min_idx = -1;
+
+            for (size_t j = 0; j < remaining_points.size(); ++j) {
+                for (int gid : groups[i]) {
+                    double dist = sqrt(pow(get<0>(remaining_points[j]) - get<0>(points_xy[gid]), 2) +
+                                       pow(get<1>(remaining_points[j]) - get<1>(points_xy[gid]), 2));
+                    if (dist < min_dist) {
+                        min_dist = dist;
+                        min_idx = (int)j; // cast j to int
+                    }
+                }
+            }
+
+            groups[i].push_back(get<2>(remaining_points[min_idx]));
+            remaining_points.erase(remaining_points.begin() + min_idx);
+        }
+    }
+
+    // Get edges from queries
+    vector<vector<pair<int, int>>> edges(M);
+    for (int k = 0; k < M; ++k) {
+        vector<int> group = groups[k];
+        sort(group.begin(), group.end(), [&](int a, int b) {
+            if (x[a] != x[b]) {
+                return x[a] < x[b];
+            }
+            return y[a] < y[b];
+        });
+        
+        int idx = 0;
+        for (int i = 0; i <= (int)group.size() - L; i += L - 1) {
+            vector<int> sub_group(group.begin() + i, group.begin() + min((int)group.size(), i + L));
+            vector<pair<int, int>> ret = query(sub_group);
+            edges[k].insert(edges[k].end(), ret.begin(), ret.end());
+            idx = i + L - 1;
+        }
+        // 最後の余りの部分
+        if ((int)group.size()-idx >2)
+        {
+            vector<int> sub_group(group.begin() + idx, group.end());
+            vector<pair<int, int>> ret = query(sub_group);
+            edges[k].insert(edges[k].end(), ret.begin(), ret.end());
+        }
+        else if ((int)group.size() -idx !=1){
+           edges[k].emplace_back(group[idx],group.back());
+        }
+        
+    }
+    answer(groups, edges);
+
     return 0;
 }
