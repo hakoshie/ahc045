@@ -5,10 +5,14 @@
 #include <random>
 #include <tuple> // Include tuple header
 
+#include <chrono>
+
 using namespace std;
-
+// timer start
+auto start_time = chrono::high_resolution_clock::now();
+const int time_limit = 1900;
 bool local = false;
-
+using ll = long long;
 vector<pair<int, int>> query(const vector<int>& c) {
     if (local) {
         vector<pair<int, int>> result;
@@ -88,7 +92,8 @@ int main() {
 
     
     vector<tuple<int, int, int>> remaining_points = points;
-
+    vector<double>group_var(M, 0);
+    double tmp_var = 0;
     for (int i = 0; i < M; ++i) {
         // Select a random point from points
         random_device rd;
@@ -115,12 +120,130 @@ int main() {
                     }
                 }
             }
-
             groups[group_id].push_back(get<2>(remaining_points[min_idx]));
             remaining_points.erase(remaining_points.begin() + min_idx);
         }
+        // Calculate the variance of the group
+        double x_sum = 0, y_sum = 0;
+        for (int idx_g : groups[group_id]) {
+            x_sum += get<0>(points_xy[idx_g]);
+            y_sum += get<1>(points_xy[idx_g]);
+        }
+        x_sum /= groups[group_id].size();
+        y_sum /= groups[group_id].size();
+        double var = 0;
+        for (int idx_g : groups[group_id]) {
+            var += pow(get<0>(points_xy[idx_g]) - x_sum, 2) + pow(get<1>(points_xy[idx_g]) - y_sum, 2);
+        }
+        var /= groups[group_id].size();
+        // groupを平均からの距離でsortする
+        // sort(groups[group_id].begin(), groups[group_id].end(), [&](int a, int b) {
+        //     double dist_a = sqrt(pow(get<0>(points_xy[a]) - x_sum, 2) + pow(get<1>(points_xy[a]) - y_sum, 2));
+        //     double dist_b = sqrt(pow(get<0>(points_xy[b]) - x_sum, 2) + pow(get<1>(points_xy[b]) - y_sum, 2));
+        //     return dist_a < dist_b;
+        // });
+        // グループをx,y座標でsortする
+        // sort(groups[group_id].begin(), groups[group_id].end(), [&](int a, int b) {
+        //     if (x[a] != x[b]) {
+        //         return x[a] < x[b];
+        //     }
+        //     return y[a] < y[b];
+        // });
+        group_var[group_id] = var;
+        tmp_var += var;
     }
+    random_device rd;
+    mt19937 gen(rd());
 
+    // Simulated annealing
+    // 温度
+    double start_temperature = 1000000;
+    double end_temperature = 0.1;
+    double current_temperature = start_temperature;
+    
+    while(1) {
+        // check time
+        auto current_time = chrono::high_resolution_clock::now();
+        auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
+        if (duration.count() > time_limit) {
+            break;
+        }
+        int g1 = uniform_int_distribution<>(0, M - 1)(gen);
+        int g2 = uniform_int_distribution<>(0, M - 1)(gen);
+        if (g1 == g2 || groups[g1].empty() || groups[g2].empty()) continue;
+
+        int i1 = uniform_int_distribution<>(0, (int)groups[g1].size() - 1)(gen);
+        int i2 = uniform_int_distribution<>(0, (int)groups[g2].size() - 1)(gen);
+
+        int p1 = groups[g1][i1];
+        int p2 = groups[g2][i2];
+        // p1, p2をswapして分散を計算する
+        swap(groups[g1][i1], groups[g2][i2]);
+        double x_sum1 = 0, y_sum1 = 0;
+        for (int idx_g : groups[g1]) {
+            x_sum1 += get<0>(points_xy[idx_g]);
+            y_sum1 += get<1>(points_xy[idx_g]);
+        }
+        x_sum1 /= groups[g1].size();
+        y_sum1 /= groups[g1].size();
+        double var1 = 0;
+        for (int idx_g : groups[g1]) {
+            var1 += pow(get<0>(points_xy[idx_g]) - x_sum1, 2) + pow(get<1>(points_xy[idx_g]) - y_sum1, 2);
+        }
+        var1 /= groups[g1].size();
+        double x_sum2 = 0, y_sum2 = 0;
+        for (int idx_g : groups[g2]) {
+            x_sum2 += get<0>(points_xy[idx_g]);
+            y_sum2 += get<1>(points_xy[idx_g]);
+        }
+        x_sum2 /= groups[g2].size();
+        y_sum2 /= groups[g2].size();
+        double var2 = 0;
+        for (int idx_g : groups[g2]) {
+            var2 += pow(get<0>(points_xy[idx_g]) - x_sum2, 2) + pow(get<1>(points_xy[idx_g]) - y_sum2, 2);
+        }
+        var2 /= groups[g2].size();
+        // 分散が小さくなったらswapを維持
+        // simulate annealing
+        double delta= (var1 + var2) - (group_var[g1] + group_var[g2]);
+        
+        if (delta < 0 || exp(-delta / current_temperature) > uniform_real_distribution<>(0, 1)(gen)) {
+            group_var[g1] = var1;
+            group_var[g2] = var2;
+            // グルーブを平均からの距離でsortする
+            // sort(groups[g1].begin(), groups[g1].end(), [&](int a, int b) {
+            //     double dist_a = sqrt(pow(get<0>(points_xy[a]) - x_sum1, 2) + pow(get<1>(points_xy[a]) - y_sum1, 2));
+            //     double dist_b = sqrt(pow(get<0>(points_xy[b]) - x_sum1, 2) + pow(get<1>(points_xy[b]) - y_sum1, 2));
+            //     return dist_a < dist_b;
+            // });
+            // sort(groups[g2].begin(), groups[g2].end(), [&](int a, int b) {
+            //     double dist_a = sqrt(pow(get<0>(points_xy[a]) - x_sum2, 2) + pow(get<1>(points_xy[a]) - y_sum2, 2));
+            //     double dist_b = sqrt(pow(get<0>(points_xy[b]) - x_sum2, 2) + pow(get<1>(points_xy[b]) - y_sum2, 2));
+            //     return dist_a < dist_b;
+            // });
+            // グループをx,y座標でsortする
+            // sort(groups[g1].begin(), groups[g1].end(), [&](int a, int b) {
+            //     if (x[a] != x[b]) {
+            //         return x[a] < x[b];
+            //     }
+            //     return y[a] < y[b];
+            // });
+            // sort(groups[g2].begin(), groups[g2].end(), [&](int a, int b) {
+            //     if (x[a] != x[b]) {
+            //         return x[a] < x[b];
+            //     }
+            //     return y[a] < y[b];
+            // });
+        } else {
+            // 分散が大きくなったら元に戻す
+            swap(groups[g1][i1], groups[g2][i2]);
+        }
+        double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit;
+        current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
+
+
+
+    }
     // Get edges from queries
     vector<vector<pair<int, int>>> edges(M);
     for (int k = 0; k < M; ++k) {
@@ -133,6 +256,7 @@ int main() {
         });
         
         int idx = 0;
+        // L=min(L,15); 
         for (int i = 0; i <= (int)group.size() - L; i += L - 1) {
             vector<int> sub_group(group.begin() + i, group.begin() + min((int)group.size(), i + L));
             vector<pair<int, int>> ret = query(sub_group);
@@ -146,7 +270,7 @@ int main() {
             vector<pair<int, int>> ret = query(sub_group);
             edges[k].insert(edges[k].end(), ret.begin(), ret.end());
         }
-        else if ((int)group.size() -idx !=1){
+        else if ((int)group.size() -idx ==2){
            edges[k].emplace_back(group[idx],group.back());
         }
         
