@@ -39,12 +39,13 @@ measure_time = true
 program = "cargo"
 args = [
     "run",
+    "-r",
     "--bin",
-    "vis",
-    "--release",
-    "./in/{SEED04}.txt",
-    "./out/{SEED04}.txt",
+    "tester",
+    "../a.out"
 ]
+stdin = "./tools/in/{SEED04}.txt"
+stdout = "./tools/out/{SEED04}.txt"
+stderr = "./tools/err/{SEED04}.txt"
 current_dir = "./tools"
 measure_time = false
-

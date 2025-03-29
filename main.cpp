@@ -51,11 +51,12 @@ int main() {
     int N, M, Q, L, W;
     cin >> N >> M >> Q >> L >> W;
 
-    vector<int> G(M);
+    vector<pair<int,int>> G(M);
     for (int i = 0; i < M; ++i) {
-        cin >> G[i];
+        cin >> G[i].first;
+        G[i].second = i;
     }
-
+    sort(G.begin(), G.end(), greater<pair<int,int>>());
     vector<int> lx(N), rx(N), ly(N), ry(N);
     for (int i = 0; i < N; ++i) {
         cin >> lx[i] >> rx[i] >> ly[i] >> ry[i];
@@ -94,20 +95,20 @@ int main() {
         mt19937 gen(rd());
         uniform_int_distribution<> distrib(0, (int)remaining_points.size() - 1); // cast size() to int
         int idx = distrib(gen);
-        
-        groups[i].push_back(get<2>(remaining_points[idx]));
+        int group_id =G[i].second;
+        groups[group_id].push_back(get<2>(remaining_points[idx]));
 
         // Remove the selected point from points
         remaining_points.erase(remaining_points.begin() + idx);
 
-        while (groups[i].size() < (size_t)G[i]) { // cast G[i] to size_t for comparison
+        while (groups[group_id].size() < (size_t)G[i].first) { // cast G[i] to size_t for comparison
             double min_dist = 1e9;
             int min_idx = -1;
 
             for (size_t j = 0; j < remaining_points.size(); ++j) {
-                for (int gid : groups[i]) {
-                    double dist = sqrt(pow(get<0>(remaining_points[j]) - get<0>(points_xy[gid]), 2) +
-                                       pow(get<1>(remaining_points[j]) - get<1>(points_xy[gid]), 2));
+                for (int idx_g : groups[group_id]) {
+                    double dist = sqrt(pow(get<0>(remaining_points[j]) - get<0>(points_xy[idx_g]), 2) +
+                                       pow(get<1>(remaining_points[j]) - get<1>(points_xy[idx_g]), 2));
                     if (dist < min_dist) {
                         min_dist = dist;
                         min_idx = (int)j; // cast j to int
@@ -115,7 +116,7 @@ int main() {
                 }
             }
 
-            groups[i].push_back(get<2>(remaining_points[min_idx]));
+            groups[group_id].push_back(get<2>(remaining_points[min_idx]));
             remaining_points.erase(remaining_points.begin() + min_idx);
         }
     }
