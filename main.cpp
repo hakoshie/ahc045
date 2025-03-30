@@ -4,10 +4,12 @@
 #include <cmath>
 #include <random>
 #include <tuple> // Include tuple header
-
 #include <chrono>
+#include <atcoder/dsu>
 
 using namespace std;
+using edge=tuple<double, int, int>;
+using pii=pair<int,int>;
 // timer start
 auto start_time = chrono::high_resolution_clock::now();
 const int time_limit = 1900;
@@ -50,7 +52,35 @@ void answer(const vector<vector<int>>& groups, const vector<vector<pair<int, int
         }
     }
 }
-
+double compute_mst(const vector<int>& group, const vector<pii>& points_xy) {
+    int n = group.size();
+    vector<edge> edges;
+    
+    // 全ての点の組み合わせの距離を計算し、エッジリストを作成
+    for (int i = 0; i < n; ++i) {
+        for (int j = i + 1; j < n; ++j) {
+            int u = group[i], v = group[j];
+            double dist = sqrt(pow(points_xy[u].first - points_xy[v].first, 2) +
+                               pow(points_xy[u].second - points_xy[v].second, 2));
+            edges.emplace_back(dist, u, v);
+        }
+    }
+    
+    // クラスカル法の準備
+    sort(edges.begin(), edges.end());
+    atcoder::dsu uf(points_xy.size());
+    double total_cost = 0.0;
+    
+    // MSTを構築
+    for (auto [cost, u, v] : edges) {
+        if (!uf.same(u, v)) {
+            uf.merge(u, v);
+            total_cost += cost;
+        }
+    }
+    
+    return total_cost;
+}
 int main() {
     int N, M, Q, L, W;
     cin >> N >> M >> Q >> L >> W;
@@ -84,16 +114,16 @@ int main() {
     }
 
     vector<vector<int>> groups(M);
-    vector<tuple<int, int>> points_xy(N); // use tuple<int,int> instead of tuple<int, int, int>
+    vector<pair<int, int>> points_xy(N); // use tuple<int,int> instead of tuple<int, int, int>
     for(int i =0; i<N; i++){
-        points_xy[i] = make_tuple(x[i],y[i]);
+        points_xy[i] = make_pair(x[i],y[i]);
     }
 
 
     
     vector<tuple<int, int, int>> remaining_points = points;
-    vector<double>group_var(M, 0);
-    double tmp_var = 0;
+    vector<double>group_dist(M, 0);
+    double tmp_dist = 0;
     for (int i = 0; i < M; ++i) {
         // Select a random point from points
         random_device rd;
@@ -105,52 +135,27 @@ int main() {
 
         // Remove the selected point from points
         remaining_points.erase(remaining_points.begin() + idx);
-
+       
         while (groups[group_id].size() < (size_t)G[i].first) { // cast G[i] to size_t for comparison
             double min_dist = 1e9;
             int min_idx = -1;
 
             for (size_t j = 0; j < remaining_points.size(); ++j) {
                 for (int idx_g : groups[group_id]) {
-                    double dist = sqrt(pow(get<0>(remaining_points[j]) - get<0>(points_xy[idx_g]), 2) +
-                                       pow(get<1>(remaining_points[j]) - get<1>(points_xy[idx_g]), 2));
+                    double dist = sqrt(pow(get<0>(remaining_points[j]) - points_xy[idx_g].first, 2) +
+                                       pow(get<1>(remaining_points[j]) - points_xy[idx_g].second, 2));
                     if (dist < min_dist) {
                         min_dist = dist;
                         min_idx = (int)j; // cast j to int
                     }
                 }
             }
+            
             groups[group_id].push_back(get<2>(remaining_points[min_idx]));
             remaining_points.erase(remaining_points.begin() + min_idx);
         }
-        // Calculate the variance of the group
-        double x_sum = 0, y_sum = 0;
-        for (int idx_g : groups[group_id]) {
-            x_sum += get<0>(points_xy[idx_g]);
-            y_sum += get<1>(points_xy[idx_g]);
-        }
-        x_sum /= groups[group_id].size();
-        y_sum /= groups[group_id].size();
-        double var = 0;
-        for (int idx_g : groups[group_id]) {
-            var += pow(get<0>(points_xy[idx_g]) - x_sum, 2) + pow(get<1>(points_xy[idx_g]) - y_sum, 2);
-        }
-        var /= groups[group_id].size();
-        // groupを平均からの距離でsortする
-        // sort(groups[group_id].begin(), groups[group_id].end(), [&](int a, int b) {
-        //     double dist_a = sqrt(pow(get<0>(points_xy[a]) - x_sum, 2) + pow(get<1>(points_xy[a]) - y_sum, 2));
-        //     double dist_b = sqrt(pow(get<0>(points_xy[b]) - x_sum, 2) + pow(get<1>(points_xy[b]) - y_sum, 2));
-        //     return dist_a < dist_b;
-        // });
-        // グループをx,y座標でsortする
-        // sort(groups[group_id].begin(), groups[group_id].end(), [&](int a, int b) {
-        //     if (x[a] != x[b]) {
-        //         return x[a] < x[b];
-        //     }
-        //     return y[a] < y[b];
-        // });
-        group_var[group_id] = var;
-        tmp_var += var;
+        group_dist[group_id] = compute_mst(groups[group_id], points_xy);
+        tmp_dist += group_dist[group_id];
     }
     random_device rd;
     mt19937 gen(rd());
@@ -160,8 +165,10 @@ int main() {
     double start_temperature = 1000000;
     double end_temperature = 0.1;
     double current_temperature = start_temperature;
-    
+    int iterations = 0;
     while(1) {
+        iterations++;
+ 
         // check time
         auto current_time = chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
@@ -178,42 +185,23 @@ int main() {
         int p1 = groups[g1][i1];
         int p2 = groups[g2][i2];
         // distanceが2500\sqrt(2)以上ならcontinue
-        double dist = sqrt(pow(get<0>(points_xy[p1]) - get<0>(points_xy[p2]), 2) +
-                           pow(get<1>(points_xy[p1]) - get<1>(points_xy[p2]), 2));
-        if (dist > 2*W * sqrt(2)) continue;
+        // double dist = sqrt(pow(points_xy[p1].first - points_xy[p2].first, 2) +
+        //                    pow(points_xy[p1].second - points_xy[p2].second, 2));
+        // if (dist > 2*W * sqrt(2)) continue;
         // p1, p2をswapして分散を計算する
         swap(groups[g1][i1], groups[g2][i2]);
-        double x_sum1 = 0, y_sum1 = 0;
-        for (int idx_g : groups[g1]) {
-            x_sum1 += get<0>(points_xy[idx_g]);
-            y_sum1 += get<1>(points_xy[idx_g]);
-        }
-        x_sum1 /= groups[g1].size();
-        y_sum1 /= groups[g1].size();
-        double var1 = 0;
-        for (int idx_g : groups[g1]) {
-            var1 += pow(get<0>(points_xy[idx_g]) - x_sum1, 2) + pow(get<1>(points_xy[idx_g]) - y_sum1, 2);
-        }
-        var1 /= groups[g1].size();
-        double x_sum2 = 0, y_sum2 = 0;
-        for (int idx_g : groups[g2]) {
-            x_sum2 += get<0>(points_xy[idx_g]);
-            y_sum2 += get<1>(points_xy[idx_g]);
-        }
-        x_sum2 /= groups[g2].size();
-        y_sum2 /= groups[g2].size();
-        double var2 = 0;
-        for (int idx_g : groups[g2]) {
-            var2 += pow(get<0>(points_xy[idx_g]) - x_sum2, 2) + pow(get<1>(points_xy[idx_g]) - y_sum2, 2);
-        }
-        var2 /= groups[g2].size();
+        double dist1 = compute_mst(groups[g1], points_xy);
+        double dist2 = compute_mst(groups[g2], points_xy);
+       
+        // swapを維持するかどうかの判定
+
         // 分散が小さくなったらswapを維持
         // simulate annealing
-        double delta= (var1 + var2) - (group_var[g1] + group_var[g2]);
+        double delta= (dist1 + dist2) - (group_dist[g1] + group_dist[g2]);
         
         if (delta < 0 || exp(-delta / current_temperature) > uniform_real_distribution<>(0, 1)(gen)) {
-            group_var[g1] = var1;
-            group_var[g2] = var2;
+            group_dist[g1] = dist1;
+            group_dist[g2] = dist2;
             // グルーブを平均からの距離でsortする
             // sort(groups[g1].begin(), groups[g1].end(), [&](int a, int b) {
             //     double dist_a = sqrt(pow(get<0>(points_xy[a]) - x_sum1, 2) + pow(get<1>(points_xy[a]) - y_sum1, 2));
@@ -225,19 +213,7 @@ int main() {
             //     double dist_b = sqrt(pow(get<0>(points_xy[b]) - x_sum2, 2) + pow(get<1>(points_xy[b]) - y_sum2, 2));
             //     return dist_a < dist_b;
             // });
-            // グループをx,y座標でsortする
-            // sort(groups[g1].begin(), groups[g1].end(), [&](int a, int b) {
-            //     if (x[a] != x[b]) {
-            //         return x[a] < x[b];
-            //     }
-            //     return y[a] < y[b];
-            // });
-            // sort(groups[g2].begin(), groups[g2].end(), [&](int a, int b) {
-            //     if (x[a] != x[b]) {
-            //         return x[a] < x[b];
-            //     }
-            //     return y[a] < y[b];
-            // });
+           
         } else {
             // 分散が大きくなったら元に戻す
             swap(groups[g1][i1], groups[g2][i2]);
@@ -280,6 +256,6 @@ int main() {
         
     }
     answer(groups, edges);
-
+    // cout<<"iterations: "<<iterations<<endl;
     return 0;
 }

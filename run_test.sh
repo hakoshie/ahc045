@@ -10,4 +10,5 @@ fi
 INPUT_FILE=$(printf "in/%04d.txt" "$1")
 
 # テスト実行
-cd ./tools && cargo run -r --bin tester ../a.out < "$INPUT_FILE" && cd ..
+g++ main.cpp
+cd ./tools && cargo run -r --bin tester ../a.out < "$INPUT_FILE" >../output.txt && cd ..
