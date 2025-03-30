@@ -177,6 +177,10 @@ int main() {
 
         int p1 = groups[g1][i1];
         int p2 = groups[g2][i2];
+        // distanceが2500\sqrt(2)以上ならcontinue
+        double dist = sqrt(pow(get<0>(points_xy[p1]) - get<0>(points_xy[p2]), 2) +
+                           pow(get<1>(points_xy[p1]) - get<1>(points_xy[p2]), 2));
+        if (dist > 2*W * sqrt(2)) continue;
         // p1, p2をswapして分散を計算する
         swap(groups[g1][i1], groups[g2][i2]);
         double x_sum1 = 0, y_sum1 = 0;
