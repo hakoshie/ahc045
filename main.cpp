@@ -39,8 +39,9 @@ template <class T> bool chmin(T &a, const T &b) { if (a > b) { a = b; return 1; 
 
 // Timer
 auto start_time = std::chrono::high_resolution_clock::now();
-const int time_limit = 1850;
 const int time_limit_init = 500;
+const int time_limit = 1700;
+const int time_limit_final =1900;
 bool LOCAL = false;
 
 using ll = long long;
@@ -392,7 +393,7 @@ int main() {
             id2group[a]=i;
         }
     }
-    map<int,set<int>> connection;
+    vector<set<int>> connection(N);
     rep(i,M){
         
         for(auto [a,b]:edges[i]){
@@ -418,7 +419,7 @@ int main() {
         // check time
         auto current_time = chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
-        if (duration.count() > time_limit+100) {
+        if (duration.count() > time_limit_final) {
             break;
         }
         int a;
@@ -433,8 +434,20 @@ int main() {
         int bid=0;
         int cid=0;
         while(bid==cid){
+            // check time
+            auto current_time = chrono::high_resolution_clock::now();
+            auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
+            if (duration.count() > time_limit_final) {
+                break;
+            }
             bid= uniform_int_distribution<>(0,connection[a].size()-1)(gen);
             cid= uniform_int_distribution<>(0,connection[a].size()-1)(gen);
+        }
+        // check time
+        current_time = chrono::high_resolution_clock::now();
+        duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
+        if (duration.count() > time_limit_final) {
+            break;
         }
         int b,c;
         b= *next(connection[a].begin(),bid);
