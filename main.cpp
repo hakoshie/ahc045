@@ -40,7 +40,7 @@ template <class T> bool chmin(T &a, const T &b) { if (a > b) { a = b; return 1; 
 // Timer
 auto start_time = std::chrono::high_resolution_clock::now();
 const int time_limit_init = 500;
-const int time_limit = 1700;
+const int time_limit = 1800;
 const int time_limit_final =1900;
 bool LOCAL = false;
 
@@ -72,9 +72,10 @@ std::set<pii> query(const std::vector<int>& c) {
 }
 
 // Function to print the answer
-void answer(const std::vector<std::vector<int>>& groups, const std::vector<std::set<pii>>& edges) {
+void answer(const std::vector<std::vector<int>>& groups, const std::vector<std::deque<pii>>& edges) {
     
     std::cout << "!" << std::endl;
+    atcoder::dsu uf(800);
     for (size_t i = 0; i < groups.size(); ++i) {
         for (int val : groups[i]) {
             std::cout << val << " ";
@@ -82,8 +83,9 @@ void answer(const std::vector<std::vector<int>>& groups, const std::vector<std::
         std::cout << std::endl;
 
         for (const auto& edge : edges[i]) {
-            
+            if(uf.same(edge.first, edge.second)) continue;           
             std::cout << edge.first << " " << edge.second << std::endl;
+            uf.merge(edge.first, edge.second);
             
         }
     }
@@ -336,10 +338,10 @@ int main() {
     }
     groups = best_groups;
     // Get edges from queries
-    vector<set<pair<int, int>>> edges(M);
+    vector<deque<pair<int, int>>> edges(M);
     atcoder::dsu uf(800);
     int num_queries = 0;
-    vector<int> boundary_city;
+    vector<int> candidate_cities;
     for (int k = 0; k < M; ++k) {
         vector<int> group = groups[k];
         // sort(group.begin(), group.end(), [&](int a, int b) {
@@ -353,13 +355,37 @@ int main() {
         int idx = 0;
         // L=min(L,15); 
         for (int i = 0; i <= (int)group.size() - L; i += L-1) {
-            vector<int> sub_group(group.begin() + i, group.begin() + min((int)group.size(), i + L));
-            boundary_city.push_back(sub_group.back());
+            
+            vector<int> sub_group(group.begin() + i+1, group.begin() + min((int)group.size(), i + L));
+            
+            if(i==0){
+                sub_group.push_back(group[i]);
+            }else{
+                double min_dist = 1e12;
+                int min_idx = -1;
+                rep(j,i+1){
+                    // double tmp_dist=1e9;
+                    double tmp_dist = 0;
+                    rep(l,sub_group.size()){
+                        double dist = pow(points_xy[group[j]].first - points_xy[sub_group[l]].first, 2) +
+                                        pow(points_xy[group[j]].second - points_xy[sub_group[l]].second, 2);
+                        tmp_dist += dist;
+                        // chmin(tmp_dist, dist);
+                    }
+                    if(tmp_dist<min_dist){
+                        min_dist=tmp_dist;
+                        min_idx=j;
+                    }
+                }
+                sub_group.push_back(group[min_idx]);
+            }
+            if(i!=0)
+            candidate_cities.push_back(sub_group.back());
             set<pair<int, int>> ret = query(sub_group);
             num_queries++;
             for (const auto& p : ret) {
                 if(uf.same(p.first, p.second)) continue;
-                edges[k].insert(p);
+                edges[k].push_back(p);
                 uf.merge(p.first, p.second);
             }
             idx = i + L-1;
@@ -372,7 +398,7 @@ int main() {
             num_queries++;
             for (const auto& p : ret) {
                 if(uf.same(p.first, p.second)) continue;
-                edges[k].insert(p);
+                edges[k].push_back(p);
                 uf.merge(p.first, p.second);
             }
         }
@@ -383,7 +409,7 @@ int main() {
             if(uf.same(u,v)) continue;
             num_queries++;
             uf.merge(u,v);
-            edges[k].insert({u,v});
+            edges[k].push_back({u,v});
         }
         
     }
@@ -399,6 +425,10 @@ int main() {
         for(auto [a,b]:edges[i]){
         //     connection[a].insert(b);
         //     connection[b].insert(a);
+            if(a>b){
+                cerr<<"a: " << a << " b: " << b << endl;
+                
+            }
             assert(a<=N);
             if(a>=N){
                 cerr<<"a: " << a << endl;
@@ -414,7 +444,7 @@ int main() {
         }
     }
     cerr<<"done"<<endl;
-    set<vector<int>>visited;
+    set<int>visited;
     while(num_queries < Q){
         // check time
         auto current_time = chrono::high_resolution_clock::now();
@@ -423,64 +453,41 @@ int main() {
             break;
         }
         int a;
-        if(boundary_city.size()){
-            int aid= uniform_int_distribution<>(0, boundary_city.size()-1)(gen);
-            a=boundary_city[aid];
+        if(candidate_cities.size()){
+            int aid= uniform_int_distribution<>(0, candidate_cities.size()-1)(gen);
+            a=candidate_cities[aid];
         }else{
             a= uniform_int_distribution<>(0, N-1)(gen);
         }
         int agroup=id2group[a];
+        if(visited.count(a)) continue;
         if(connection[a].size() <=1) continue;
-        int bid=0;
-        int cid=0;
-        while(bid==cid){
-            // check time
-            auto current_time = chrono::high_resolution_clock::now();
-            auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
-            if (duration.count() > time_limit_final) {
-                break;
-            }
-            bid= uniform_int_distribution<>(0,connection[a].size()-1)(gen);
-            cid= uniform_int_distribution<>(0,connection[a].size()-1)(gen);
-        }
-        // check time
-        current_time = chrono::high_resolution_clock::now();
-        duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
-        if (duration.count() > time_limit_final) {
-            break;
-        }
-        int b,c;
-        b= *next(connection[a].begin(),bid);
-        c= *next(connection[a].begin(),cid);
-        vector<int>visit={a,b,c};
-        sort(visit.begin(), visit.end());
-        if(visited.count(visit)) continue;
-        visited.insert(visit);
-        pii edge1={a,b};
-        pii edge2={a,c};
-        if(a>b)swap(edge1.x,edge1.y);
-        if(a>c)swap(edge2.x,edge2.y);
-        if(edges[agroup].count(edge1)==1 and edges[agroup].count(edge2)==1){
-            // cerr<<"ok"<<endl;
-        }else{
-            cerr<<"ng"<<endl;
-            continue;
+        vector<int>visit;
+        visit.push_back(a);
+        visited.insert(a);
+        int connection_size=connection[a].size();
+        rep(i, min(L-1,connection_size)){
+            int bid= uniform_int_distribution<>(0, connection[a].size()-1)(gen);
+            int b= *next(connection[a].begin(), bid);
+            visit.push_back(b);
+            connection[a].erase(b);
+            connection[b].erase(a);
         }
 
-        auto edges_new=query(vector<int>{a,b,c});
-        edges[agroup].erase(edge1);
-        edges[agroup].erase(edge2);
-        connection[a].erase(b);
-        connection[a].erase(c);
-        connection[b].erase(a);
-        connection[c].erase(a);
+        auto edges_new=query(visit);
         for(auto [u,v]:edges_new){
             if(u>v)swap(u,v);
-            edges[agroup].insert({u,v});
+            edges[agroup].push_front({u,v});
             connection[u].insert(v);
             connection[v].insert(u);
         }
         num_queries++;   
+        // candidate_cities.clear();
+        // rep(i,N){
+        //     if(connection[i].size()>1){
+        //         candidate_cities.push_back(i);
+        //     }
+        // }
 
     }
     answer(groups, edges);
