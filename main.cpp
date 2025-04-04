@@ -45,7 +45,12 @@ const int time_limit_final =1900;
 bool LOCAL = false;
 
 using ll = long long;
+const int Nconst=800;
+int W;
 
+vector<int>width(Nconst);
+vector<int>height(Nconst);
+vector<pair<int, int>> points_xy(Nconst);
 // Function to perform a query
 std::set<pii> query(const std::vector<int>& c) {
     if (LOCAL) {
@@ -141,14 +146,14 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
     // cerr<<"generate_random_path"<<endl;
     int diameter = tree_diameter(group, edges);
     pathLen = min(pathLen, diameter);
-    if(pathLen==diameter){
-        if(rand() % 2 == 0){
-            pathLen = max(2, pathLen -1);
-            if(rand() % 2 == 0){
-                pathLen = max(2, pathLen -1);
-            }
-        }
-    }
+    // if(pathLen==diameter){
+    //     if(rand() % 2 == 0){
+    //         pathLen = max(2, pathLen -1);
+    //         if(rand() % 2 == 0){
+    //             pathLen = max(2, pathLen -1);
+    //         }
+    //     }
+    // }
     random_device rd;
     mt19937 gen(rd());
 
@@ -180,8 +185,9 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
             // cerr<<"path.size(): " << path.size() << endl;
             // auto current_time = std::chrono::high_resolution_clock::now();
             // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
-            // if (duration.count() > 20) {
-            //     pathLen =max(2, pathLen-1);
+            // if (duration.count() > 30) {
+            //     pathLen =max(2, pathLen/2);
+            //     start_time = std::chrono::high_resolution_clock::now();
             // }
             int current = path.back();
             vector<int> neighbors;
@@ -207,7 +213,7 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
     }
 }
 // Function to compute the MST length
-double compute_mst_length(const std::vector<int>& group, const std::vector<pii>& points_xy) {
+double compute_mst_length(const std::vector<int>& group) {
     int n = group.size();
     std::vector<std::tuple<double, int, int>> edges;
 
@@ -233,7 +239,7 @@ double compute_mst_length(const std::vector<int>& group, const std::vector<pii>&
 }
 
 // Function to compute the MST order
-std::vector<int> compute_mst_with_order(const std::vector<int>& group, const std::vector<pii>& points_xy) {
+std::vector<int> compute_mst_with_order(const std::vector<int>& group) {
     int n = group.size();
     std::vector<std::tuple<double, int, int>> edges;
 
@@ -270,7 +276,7 @@ std::vector<int> compute_mst_with_order(const std::vector<int>& group, const std
     dfs(group[0]);
     return order;
 }
-std::set<pair<int,int>> compute_mst_edges(const std::vector<int>& group, const std::vector<pii>& points_xy) {
+std::set<pair<int,int>> compute_mst_edges(const std::vector<int>& group) {
     int n = group.size();
     std::vector<std::tuple<double, int, int>> edges;
 
@@ -300,7 +306,7 @@ std::set<pair<int,int>> compute_mst_edges(const std::vector<int>& group, const s
 
 
 }
-double calculate_variance(const std::vector<int>& group, const std::vector<pii>& points_xy) {
+double calculate_variance(const std::vector<int>& group) {
     double x_sum = 0, y_sum = 0;
     for (int idx_g : group) {
         x_sum += points_xy[idx_g].first;
@@ -312,10 +318,11 @@ double calculate_variance(const std::vector<int>& group, const std::vector<pii>&
     double variance = 0;
     for (int idx_g : group) {
         variance += std::pow(points_xy[idx_g].first - x_sum, 2) + std::pow(points_xy[idx_g].second - y_sum, 2);
+        // variance += std::pow(width[idx_g], .5) + std::pow(height[idx_g], .5);
     }
     return variance / group.size();
 }
-double compute_all_path_length(const std::vector<int>& group, const std::vector<pii>& points_xy) {
+double compute_all_path_length(const std::vector<int>& group) {
     double total_length = 0;
     for (size_t i = 0; i < group.size(); ++i) {
         for (size_t j = i + 1; j < group.size(); ++j) {
@@ -328,7 +335,7 @@ double compute_all_path_length(const std::vector<int>& group, const std::vector<
     return total_length;
 }
 int main() {
-    int N, M, Q, L, W;
+    int N, M, Q, L;
     cin >> N >> M >> Q >> L >> W;
 
     vector<pair<int,int>> G(M);
@@ -347,6 +354,8 @@ int main() {
     for (int i = 0; i < N; ++i) {
         x[i] = (lx[i] + rx[i]) / 2;
         y[i] = (ly[i] + ry[i]) / 2;
+        width[i] = rx[i] - lx[i];
+        height[i] = ry[i] - ly[i];
     }
 
     vector<int> id(N);
@@ -360,7 +369,7 @@ int main() {
     }
 
     vector<vector<int>> groups(M);
-    vector<pair<int, int>> points_xy(N); // use tuple<int,int> instead of tuple<int, int, int>
+
     for(int i =0; i<N; i++){
         points_xy[i] = make_pair(x[i],y[i]);
     }
@@ -376,9 +385,11 @@ int main() {
     double tmp_dist =1e15;
     double tmp_mst_dist =1e15;
     double tmp_all_path_length = 1e15;
-    double start_temperature = 1e7;
+    double start_temperature = 1e20;
     double end_temperature = 1e0;
     double current_temperature = start_temperature;
+    random_device rd;
+    mt19937 gen(rd());
     // 以下を10回繰り返して最もvarianceが小さくなるようにする
     for(int trial=0;trial<100;trial++){
         // check time
@@ -400,8 +411,7 @@ int main() {
         vector<tuple<int, int, int>> remaining_points = points;
         for (int i = 0; i < M; ++i) {
             // Select a random point from points
-            random_device rd;
-            mt19937 gen(rd());
+         
             uniform_int_distribution<> distrib(0, (int)remaining_points.size() - 1); // cast size() to int
             int idx = distrib(gen);
             int group_id =G[i].second;
@@ -430,23 +440,23 @@ int main() {
                 groups_t[group_id].push_back(get<2>(remaining_points[min_idx]));
                 remaining_points.erase(remaining_points.begin() + min_idx);
             }
-            double var=calculate_variance(groups_t[group_id], points_xy);
+            double var=calculate_variance(groups_t[group_id]);
             group_var_t[group_id] = var;
             var_t += var;
             group_dist_t[group_id] = dist_t;
-            group_all_path_length_t[group_id] = compute_all_path_length(groups_t[group_id], points_xy);
-            all_path_length_t += group_all_path_length_t[group_id];
-            // group_mst_dist_t[group_id] = compute_mst_length(groups_t[group_id], points_xy);
+            // group_all_path_length_t[group_id] = compute_all_path_length(groups_t[group_id]);
+            // all_path_length_t += group_all_path_length_t[group_id];
+            // group_mst_dist_t[group_id] = compute_mst_length(groups_t[group_id]);
             mst_dist_t += group_mst_dist_t[group_id];
             double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit_init;
             current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
         }
         // variance
-        // if(tmp_var > var_t){
-        //     tmp_var = var_t;
-        //     groups = groups_t;
-        //     group_var = group_var_t;
-        // }
+        if(tmp_var > var_t){
+            tmp_var = var_t;
+            groups = groups_t;
+            group_var = group_var_t;
+        }
         // dist*variance
         // if(tmp_dist * tmp_var > dist_t*var_t){
         //     tmp_dist = dist_t;
@@ -455,15 +465,15 @@ int main() {
         //     group_var = group_var_t;
         // }
         // all_path_length
-        if(tmp_all_path_length > all_path_length_t){
-            tmp_all_path_length = all_path_length_t;
-            tmp_var = var_t;
-            groups = groups_t;
-            group_var = group_var_t;
-            group_dist = group_dist_t;
-            group_mst_dist = group_mst_dist_t;
-            group_all_path_length = group_all_path_length_t;
-        }
+        // if(tmp_all_path_length > all_path_length_t){
+        //     tmp_all_path_length = all_path_length_t;
+        //     tmp_var = var_t;
+        //     groups = groups_t;
+        //     group_var = group_var_t;
+        //     group_dist = group_dist_t;
+        //     group_mst_dist = group_mst_dist_t;
+        //     group_all_path_length = group_all_path_length_t;
+        // }
         // mst_dist
         // if(tmp_mst_dist> mst_dist_t){
         //     tmp_mst_dist = mst_dist_t;
@@ -476,12 +486,12 @@ int main() {
 
     }
     cerr<<"tmp_var: " << tmp_var << endl;
-    random_device rd;
-    mt19937 gen(rd());
+    // random_device rd;
+    // mt19937 gen(rd());
 
     // Simulated annealing
     // 温度
-    start_temperature = 1e8;
+    start_temperature = 1e10;
     end_temperature = 1e0;
     current_temperature = start_temperature;
     auto best_groups = groups;
@@ -522,11 +532,11 @@ int main() {
                         //    pow(get<1>(points_xy[p1]) - get<1>(points_xy[p2]), 2));
         double dist = sqrt(pow(points_xy[p1].first - points_xy[p2].first, 2) +
                                pow(points_xy[p1].second - points_xy[p2].second, 2));
-        if (dist > 3*W * sqrt(2)) continue;
+        if (dist > 10000) continue;
         // p1, p2をswapして分散を計算する
         swap(groups[g1][i1], groups[g2][i2]);
-        double var1=calculate_variance(groups[g1], points_xy);
-        double var2=calculate_variance(groups[g2], points_xy);
+        double var1=calculate_variance(groups[g1]);
+        double var2=calculate_variance(groups[g2]);
 
         // simulate annealing
         double delta= (var1 + var2) - (group_var[g1] + group_var[g2]);
@@ -557,7 +567,7 @@ int main() {
     // compute edges
     for (int k = 0; k < M; ++k) {
         vector<int> group = groups[k];
-        edges[k]=compute_mst_edges(group, points_xy);
+        edges[k]=compute_mst_edges(group);
     }
     map<int,int>id2group;
     for(int i=0;i<M;i++){

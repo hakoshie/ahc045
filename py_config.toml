@@ -16,20 +16,29 @@ out_dir = "./pahcer"
 #         COMPILE STEPS
 # ==============================
 
-# You don't need to compile anything for Python
+# Python なのでビルド不要
 compile_steps = []
 
 # ==============================
 #           TEST STEPS
 # ==============================
 
-# Run the user's program
+# Run the tester with the Python solution
 [[test.test_steps]]
-program = "python3"
-args = ["./main.py"]
+program = "cargo"
+args = [
+    "run",
+    "-r",
+    "--bin",
+    "tester",
+    "--",
+    "python3",
+    "../main.py"
+]
 stdin = "./tools/in/{SEED04}.txt"
 stdout = "./tools/out/{SEED04}.txt"
 stderr = "./tools/err/{SEED04}.txt"
+current_dir = "./tools"
 measure_time = true
 
 # Run the visualizer to calculate the score
@@ -41,8 +50,7 @@ args = [
     "vis",
     "--release",
     "./in/{SEED04}.txt",
-    "./out/{SEED04}.txt",
+    "./out/{SEED04}.txt"
 ]
 current_dir = "./tools"
 measure_time = false
-

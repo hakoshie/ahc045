@@ -27,11 +27,18 @@ args = ["-std=c++20", "-O2", "main.cpp"]
 
 # Run the user's program
 [[test.test_steps]]
-program = "./a.out"
-args = []
+program = "cargo"
+args = [
+    "run",
+    "-r",
+    "--bin",
+    "tester",
+    "../a.out"
+]
 stdin = "./tools/in/{SEED04}.txt"
 stdout = "./tools/out/{SEED04}.txt"
 stderr = "./tools/err/{SEED04}.txt"
+current_dir = "./tools"
 measure_time = true
 
 # Run the visualizer to calculate the score
@@ -47,4 +54,3 @@ args = [
 ]
 current_dir = "./tools"
 measure_time = false
-
