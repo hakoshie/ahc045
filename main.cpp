@@ -141,11 +141,14 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
     // cerr<<"generate_random_path"<<endl;
     int diameter = tree_diameter(group, edges);
     pathLen = min(pathLen, diameter);
-    // if(pathLen==diameter){
-    //     if(rand() % 2 == 0){
-    //         pathLen = max(2, pathLen - 1);
-    //     }
-    // }
+    if(pathLen==diameter){
+        if(rand() % 2 == 0){
+            pathLen = max(2, pathLen -1);
+            if(rand() % 2 == 0){
+                pathLen = max(2, pathLen -1);
+            }
+        }
+    }
     random_device rd;
     mt19937 gen(rd());
 
@@ -312,6 +315,18 @@ double calculate_variance(const std::vector<int>& group, const std::vector<pii>&
     }
     return variance / group.size();
 }
+double compute_all_path_length(const std::vector<int>& group, const std::vector<pii>& points_xy) {
+    double total_length = 0;
+    for (size_t i = 0; i < group.size(); ++i) {
+        for (size_t j = i + 1; j < group.size(); ++j) {
+            int u = group[i], v = group[j];
+            double dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
+                                     std::pow(points_xy[u].second - points_xy[v].second, 2));
+            total_length += dist;
+        }
+    }
+    return total_length;
+}
 int main() {
     int N, M, Q, L, W;
     cin >> N >> M >> Q >> L >> W;
@@ -356,9 +371,11 @@ int main() {
     vector<double>group_var(M, 0);
     vector<double>group_dist(M, 0);
     vector<double>group_mst_dist(M, 0);
+    vector<double>group_all_path_length(M, 0);
     double tmp_var = 1e15;
     double tmp_dist =1e15;
     double tmp_mst_dist =1e15;
+    double tmp_all_path_length = 1e15;
     double start_temperature = 1e7;
     double end_temperature = 1e0;
     double current_temperature = start_temperature;
@@ -373,10 +390,13 @@ int main() {
         double var_t=0;
         double dist_t=0;
         double mst_dist_t=0;
+        double all_path_length_t=0;
+        
         vector<vector<int>> groups_t(M);
         vector<double> group_var_t(M, 0);
         vector<double> group_dist_t(M, 0);
         vector<double> group_mst_dist_t(M, 0);
+        vector<double> group_all_path_length_t(M, 0);
         vector<tuple<int, int, int>> remaining_points = points;
         for (int i = 0; i < M; ++i) {
             // Select a random point from points
@@ -414,6 +434,8 @@ int main() {
             group_var_t[group_id] = var;
             var_t += var;
             group_dist_t[group_id] = dist_t;
+            group_all_path_length_t[group_id] = compute_all_path_length(groups_t[group_id], points_xy);
+            all_path_length_t += group_all_path_length_t[group_id];
             // group_mst_dist_t[group_id] = compute_mst_length(groups_t[group_id], points_xy);
             mst_dist_t += group_mst_dist_t[group_id];
             double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit_init;
@@ -426,11 +448,21 @@ int main() {
         //     group_var = group_var_t;
         // }
         // dist*variance
-        if(tmp_dist * tmp_var > dist_t*var_t){
-            tmp_dist = dist_t;
+        // if(tmp_dist * tmp_var > dist_t*var_t){
+        //     tmp_dist = dist_t;
+        //     tmp_var = var_t;
+        //     groups = groups_t;
+        //     group_var = group_var_t;
+        // }
+        // all_path_length
+        if(tmp_all_path_length > all_path_length_t){
+            tmp_all_path_length = all_path_length_t;
             tmp_var = var_t;
             groups = groups_t;
             group_var = group_var_t;
+            group_dist = group_dist_t;
+            group_mst_dist = group_mst_dist_t;
+            group_all_path_length = group_all_path_length_t;
         }
         // mst_dist
         // if(tmp_mst_dist> mst_dist_t){
@@ -455,6 +487,16 @@ int main() {
     auto best_groups = groups;
     auto best_group_var = group_var;
     auto best_var = tmp_var;
+
+    vector<int>weight(M);
+    // vector<int>weight2(M);
+    for(int i=0;i<M;i++){
+       weight[i]=groups[i].size()*groups[i].size();
+    //    weight2[i]=1/groups[i].size();
+    }
+    // 重みづけサンプリング
+    discrete_distribution<> dist_g1(weight.begin(), weight.end());
+    // discrete_distribution<> dist_g2(weight2.begin(), weight2.end());
     while(1) {
         // check time
         auto current_time = chrono::high_resolution_clock::now();
@@ -462,10 +504,14 @@ int main() {
         if (duration.count() > time_limit) {
             break;
         }
-        int g1 = uniform_int_distribution<>(0, M - 1)(gen);
-        int g2 = uniform_int_distribution<>(0, M - 1)(gen);
-        if (g1 == g2 || groups[g1].empty() || groups[g2].empty()) continue;
 
+        int g1 = uniform_int_distribution<>(0, M - 1)(gen);
+        // int g1 = dist_g1(gen);
+        int g2 = uniform_int_distribution<>(0, M - 1)(gen);
+        // int g2 = dist_g1(gen);
+        // int g2 = dist_g2(gen);
+        if (g1 == g2 || groups[g1].empty() || groups[g2].empty()) continue;
+        
         int i1 = uniform_int_distribution<>(0, (int)groups[g1].size() - 1)(gen);
         int i2 = uniform_int_distribution<>(0, (int)groups[g2].size() - 1)(gen);
 
@@ -476,30 +522,23 @@ int main() {
                         //    pow(get<1>(points_xy[p1]) - get<1>(points_xy[p2]), 2));
         double dist = sqrt(pow(points_xy[p1].first - points_xy[p2].first, 2) +
                                pow(points_xy[p1].second - points_xy[p2].second, 2));
-        if (dist > 2*W * sqrt(2)) continue;
+        if (dist > 3*W * sqrt(2)) continue;
         // p1, p2をswapして分散を計算する
         swap(groups[g1][i1], groups[g2][i2]);
         double var1=calculate_variance(groups[g1], points_xy);
         double var2=calculate_variance(groups[g2], points_xy);
-        // double mst1=compute_mst_length(groups[g1], points_xy);
-        // double mst2=compute_mst_length(groups[g2], points_xy);
-        // 分散が小さくなったらswapを維持
+
         // simulate annealing
         double delta= (var1 + var2) - (group_var[g1] + group_var[g2]);
-        // double delta= mst1 + mst2 - (group_mst_dist[g1] + group_mst_dist[g2]);
         
         if (delta < 0 || exp(-delta / current_temperature) > uniform_real_distribution<>(0, 1)(gen)) {
             group_var[g1] = var1;
             group_var[g2] = var2;
             tmp_var += delta;
-            if (tmp_var < best_var) {
-                best_var = tmp_var;
-                best_groups = groups;
-            }
-            // group_mst_dist[g1] = mst1;
-            // group_mst_dist[g2] = mst2;
-            // group_var[g1] = var1;   
-            // group_var[g2] = var2;
+            // if (tmp_var < best_var) {
+            //     best_var = tmp_var;
+            //     best_groups = groups;
+            // }
             
         } else {
             // 分散が大きくなったら元に戻す
@@ -509,82 +548,16 @@ int main() {
         current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
 
     }
-    groups = best_groups;
+    // groups = best_groups;
     // Get edges from queries
     vector<set<pair<int, int>>> edges(M);
     atcoder::dsu uf(800);
     int num_queries = 0;
     vector<int> candidate_cities;
+    // compute edges
     for (int k = 0; k < M; ++k) {
         vector<int> group = groups[k];
-        // sort(group.begin(), group.end(), [&](int a, int b) {
-        //     if (x[a] != x[b]) {
-        //         return x[a] < x[b];
-        //     }
-        //     return y[a] < y[b];
-        // });
-        // group = compute_mst_with_order(group, points_xy);
         edges[k]=compute_mst_edges(group, points_xy);
-        // int idx = 0;
-        // // L=min(L,15); 
-        // for (int i = 0; i <= (int)group.size() - L; i += L-1) {
-            
-        //     vector<int> sub_group(group.begin() + i+1, group.begin() + min((int)group.size(), i + L));
-            
-        //     if(i==0){
-        //         sub_group.push_back(group[i]);
-        //     }else{
-        //         double min_dist = 1e12;
-        //         int min_idx = -1;
-        //         rep(j,i+1){
-        //             // double tmp_dist=1e9;
-        //             double tmp_dist = 0;
-        //             rep(l,sub_group.size()){
-        //                 double dist = pow(points_xy[group[j]].first - points_xy[sub_group[l]].first, 2) +
-        //                                 pow(points_xy[group[j]].second - points_xy[sub_group[l]].second, 2);
-        //                 tmp_dist += dist;
-        //                 // chmin(tmp_dist, dist);
-        //             }
-        //             if(tmp_dist<min_dist){
-        //                 min_dist=tmp_dist;
-        //                 min_idx=j;
-        //             }
-        //         }
-        //         sub_group.push_back(group[min_idx]);
-        //     }
-        //     if(i!=0)
-        //     candidate_cities.push_back(sub_group.back());
-        //     set<pair<int, int>> ret = query(sub_group);
-        //     num_queries++;
-        //     for (const auto& p : ret) {
-        //         if(uf.same(p.first, p.second)) continue;
-        //         edges[k].push_back(p);
-        //         uf.merge(p.first, p.second);
-        //     }
-        //     idx = i + L-1;
-        // }
-        // // 最後の余りの部分
-        // if ((int)group.size()-idx >2)
-        // {
-        //     vector<int> sub_group(group.begin() + idx, group.end());
-        //     set<pair<int, int>> ret = query(sub_group);
-        //     num_queries++;
-        //     for (const auto& p : ret) {
-        //         if(uf.same(p.first, p.second)) continue;
-        //         edges[k].push_back(p);
-        //         uf.merge(p.first, p.second);
-        //     }
-        // }
-        // else if ((int)group.size() -idx ==2){
-        //     int u=group[idx];
-        //     int v=group[idx+1];
-        //     if(u>v)swap(u,v);
-        //     if(uf.same(u,v)) continue;
-        //     num_queries++;
-        //     uf.merge(u,v);
-        //     edges[k].push_back({u,v});
-        // }
-        
     }
     map<int,int>id2group;
     for(int i=0;i<M;i++){
@@ -594,14 +567,7 @@ int main() {
     }
     vector<set<int>> connection(N);
     rep(i,M){
-        
         for(auto [a,b]:edges[i]){
-        //     connection[a].insert(b);
-        //     connection[b].insert(a);
-            // if(a>b){
-            //     cerr<<"a: " << a << " b: " << b << endl;
-                
-            // }
             assert(a<=N);
             if(a>=N){
                 cerr<<"a: " << a << endl;
@@ -657,52 +623,6 @@ int main() {
 
         num_queries++;
     }
-    // set<int>visited;
-    // while(num_queries < Q){
-    //     // check time
-    //     auto current_time = chrono::high_resolution_clock::now();
-    //     auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
-    //     if (duration.count() > time_limit_final) {
-    //         break;
-    //     }
-    //     int a;
-    //     if(candidate_cities.size() and visited.size()<candidate_cities.size()){
-    //         int aid= uniform_int_distribution<>(0, candidate_cities.size()-1)(gen);
-    //         a=candidate_cities[aid];
-    //     }else{
-    //         a= uniform_int_distribution<>(0, N-1)(gen);
-    //     }
-    //     int agroup=id2group[a];
-    //     if(visited.count(a)) continue;
-    //     if(connection[a].size() <=1) continue;
-    //     vector<int>visit;
-    //     visit.push_back(a);
-    //     visited.insert(a);
-    //     int connection_size=connection[a].size();
-    //     rep(i, min(L-1,connection_size)){
-    //         int bid= uniform_int_distribution<>(0, connection[a].size()-1)(gen);
-    //         int b= *next(connection[a].begin(), bid);
-    //         visit.push_back(b);
-    //         connection[a].erase(b);
-    //         connection[b].erase(a);
-    //     }
-
-    //     auto edges_new=query(visit);
-    //     for(auto [u,v]:edges_new){
-    //         if(u>v)swap(u,v);
-    //         edges[agroup].push_front({u,v});
-    //         connection[u].insert(v);
-    //         connection[v].insert(u);
-    //     }
-    //     num_queries++;   
-    //     candidate_cities.clear();
-    //     rep(i,N){
-    //         if(connection[i].size()>1){
-    //             candidate_cities.push_back(i);
-    //         }
-    //     }
-
-    // }
     answer(groups, edges);
     cerr<<"Queries: " << num_queries << endl;
     return 0;
