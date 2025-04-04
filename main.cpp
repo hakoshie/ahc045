@@ -40,7 +40,7 @@ template <class T> bool chmin(T &a, const T &b) { if (a > b) { a = b; return 1; 
 // Timer
 auto start_time = std::chrono::high_resolution_clock::now();
 const int time_limit_init = 500;
-const int time_limit = 1500;
+const int time_limit = 1700;
 const int time_limit_final =1900;
 bool LOCAL = false;
 
@@ -141,11 +141,11 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
     // cerr<<"generate_random_path"<<endl;
     int diameter = tree_diameter(group, edges);
     pathLen = min(pathLen, diameter);
-    if(pathLen==diameter){
-        if(rand() % 2 == 0){
-            pathLen = max(2, pathLen - 1);
-        }
-    }
+    // if(pathLen==diameter){
+    //     if(rand() % 2 == 0){
+    //         pathLen = max(2, pathLen - 1);
+    //     }
+    // }
     random_device rd;
     mt19937 gen(rd());
 
@@ -175,11 +175,11 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
         // ランダムウォーク
         while ((int)path.size() < pathLen + 1) {
             // cerr<<"path.size(): " << path.size() << endl;
-            auto current_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
-            if (duration.count() > 20) {
-                pathLen =max(2, pathLen-1);
-            }
+            // auto current_time = std::chrono::high_resolution_clock::now();
+            // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
+            // if (duration.count() > 20) {
+            //     pathLen =max(2, pathLen-1);
+            // }
             int current = path.back();
             vector<int> neighbors;
 
@@ -617,6 +617,15 @@ int main() {
         }
     }
     cerr<<"done"<<endl;
+    // グループのサイズを基に重み付けサンプリング
+  
+    vector<int>nvisit_group(M,0);
+    // auto group_id= uniform_int_distribution<>(0, M-1)(gen);
+    std::vector<double> weights(M);
+    for (int i = 0; i < M; ++i) {
+        weights[i] = groups[i].size(); // グループのサイズを重みとする
+        if(groups[i].size()<=2) weights[i]=0;
+    }
     while(num_queries<Q){
         // check time
         auto current_time = chrono::high_resolution_clock::now();
@@ -624,7 +633,12 @@ int main() {
         if (duration.count() > time_limit_final) {
             break;
         }
-        auto group_id= uniform_int_distribution<>(0, M-1)(gen);
+        
+    
+        // 重みの合計を計算
+        std::discrete_distribution<> dist(weights.begin(), weights.end());
+        auto group_id = dist(gen); // 重み付けサンプリングで group_id を選択
+        nvisit_group[group_id]++;
         auto group=groups[group_id];
         if(group.size()<=2) continue;
         auto [coordinates,used_edges]=generate_random_path(group, edges[group_id], L-1);
