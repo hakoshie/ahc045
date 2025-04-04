@@ -182,13 +182,7 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
 
         // ランダムウォーク
         while ((int)path.size() < pathLen + 1) {
-            // cerr<<"path.size(): " << path.size() << endl;
-            // auto current_time = std::chrono::high_resolution_clock::now();
-            // auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
-            // if (duration.count() > 30) {
-            //     pathLen =max(2, pathLen/2);
-            //     start_time = std::chrono::high_resolution_clock::now();
-            // }
+       
             int current = path.back();
             vector<int> neighbors;
 
@@ -428,7 +422,7 @@ int main() {
                     for (int idx_g : groups_t[group_id]) {
                         double dist = sqrt(pow(get<0>(remaining_points[j]) -points_xy[idx_g].first, 2) +
                                         pow(get<1>(remaining_points[j]) -points_xy[idx_g].second, 2));
-                        auto delta= min_dist - dist;
+                        // auto delta= min_dist - dist;
                         // if (dist < min_dist or (delta<2*W*sqrt(2) and .35> uniform_real_distribution<>(0, 1)(gen))) {
                         if (dist < min_dist) {
                             min_dist = dist;
@@ -448,22 +442,22 @@ int main() {
             // all_path_length_t += group_all_path_length_t[group_id];
             // group_mst_dist_t[group_id] = compute_mst_length(groups_t[group_id]);
             mst_dist_t += group_mst_dist_t[group_id];
-            double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit_init;
-            current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
+            // double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit_init;
+            // current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
         }
         // variance
-        if(tmp_var > var_t){
-            tmp_var = var_t;
-            groups = groups_t;
-            group_var = group_var_t;
-        }
-        // dist*variance
-        // if(tmp_dist * tmp_var > dist_t*var_t){
-        //     tmp_dist = dist_t;
+        // if(tmp_var > var_t){
         //     tmp_var = var_t;
         //     groups = groups_t;
         //     group_var = group_var_t;
         // }
+        // dist*variance
+        if(tmp_dist * tmp_var > dist_t*var_t){
+            tmp_dist = dist_t;
+            tmp_var = var_t;
+            groups = groups_t;
+            group_var = group_var_t;
+        }
         // all_path_length
         // if(tmp_all_path_length > all_path_length_t){
         //     tmp_all_path_length = all_path_length_t;
@@ -532,7 +526,7 @@ int main() {
                         //    pow(get<1>(points_xy[p1]) - get<1>(points_xy[p2]), 2));
         double dist = sqrt(pow(points_xy[p1].first - points_xy[p2].first, 2) +
                                pow(points_xy[p1].second - points_xy[p2].second, 2));
-        if (dist > 10000) continue;
+        if (dist > 5000) continue;
         // p1, p2をswapして分散を計算する
         swap(groups[g1][i1], groups[g2][i2]);
         double var1=calculate_variance(groups[g1]);
@@ -596,6 +590,8 @@ int main() {
     // グループのサイズを基に重み付けサンプリング
   
     vector<int>nvisit_group(M,0);
+    vector<int>fully_visited_group(M,0);
+    set<vector<int>> visited;
     // auto group_id= uniform_int_distribution<>(0, M-1)(gen);
     std::vector<double> weights(M);
     for (int i = 0; i < M; ++i) {
@@ -614,15 +610,36 @@ int main() {
         // 重みの合計を計算
         std::discrete_distribution<> dist(weights.begin(), weights.end());
         auto group_id = dist(gen); // 重み付けサンプリングで group_id を選択
+        if(fully_visited_group[group_id]>0){
+            continue;
+        }
         nvisit_group[group_id]++;
         auto group=groups[group_id];
         if(group.size()<=2) continue;
         auto [coordinates,used_edges]=generate_random_path(group, edges[group_id], L-1);
+
         // cerr<<"coordinates: " << coordinates.size() << endl;
         // for(auto a:coordinates){
         //     cerr<<a << " ";
         // }
         // cerr<<endl;
+        sort(coordinates.begin(), coordinates.end());
+        if(visited.count(coordinates)){
+            int coordinates_size=coordinates.size();
+            auto [coordinates2,used_edges2]=generate_random_path(group, edges[group_id], coordinates_size-2);
+            sort(coordinates2.begin(), coordinates2.end());
+            if(visited.count(coordinates2)){
+                continue;
+            }
+            coordinates=coordinates2;
+            used_edges.clear();
+            used_edges=used_edges2;
+            // visited.insert(coordinates);
+        }
+        visited.insert(coordinates);
+        if(coordinates.size()==group.size()){
+            fully_visited_group[group_id]++;
+        }
         for(auto [u,v]:used_edges){
             edges[group_id].erase({u,v});
         }
