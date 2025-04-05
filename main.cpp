@@ -48,6 +48,7 @@ using ll = long long;
 const int Nconst=800;
 int W;
 bool use_estimated_distance = false;
+bool use_mst_distance = false;
 vector<int>width(Nconst);
 vector<int>height(Nconst);
 vector<pair<int, int>> points_xy(Nconst);
@@ -255,7 +256,7 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
     }
 }
 // Function to compute the MST length
-double compute_mst_length(const std::vector<int>& group) {
+double compute_mst_distance(const std::vector<int>& group) {
     int n = group.size();
     std::vector<std::tuple<double, int, int>> edges;
 
@@ -363,6 +364,45 @@ std::set<pair<int,int>> compute_mst_edges(const std::vector<int>& group) {
 
 
 }
+// Function to calculate variance considering uncertainty (using fixed centroid)
+double calculate_uncertainty_aware_variance(const std::vector<int>& group) {
+    if (group.empty()) return 0.0;
+    int group_size = group.size();
+
+    // 1. Calculate centroid based on center points
+    double sum_cx = 0, sum_cy = 0;
+    for (int idx : group) {
+        sum_cx += (lx[idx] + rx[idx]) / 2.0; // Use double for precision
+        sum_cy += (ly[idx] + ry[idx]) / 2.0;
+    }
+    double centroid_cx = sum_cx / group_size;
+    double centroid_cy = sum_cy / group_size;
+
+    // 2. Calculate sum of expected squared distances to the fixed centroid
+    double sum_expected_sq_dist = 0;
+    for (int idx : group) {
+        double lxi = lx[idx], rxi = rx[idx];
+        double lyi = ly[idx], ryi = ry[idx];
+
+        // E[xi] and E[yi] (center points)
+        double exi = (lxi + rxi) / 2.0;
+        double eyi = (lyi + ryi) / 2.0;
+
+        // E[xi^2] and E[yi^2]
+        double exi2 = expected_square(lxi, rxi);
+        double eyi2 = expected_square(lyi, ryi);
+
+        // E[(xi - centroid_cx)^2] = E[xi^2] - 2*centroid_cx*E[xi] + centroid_cx^2
+        double expected_dx2 = exi2 - 2.0 * centroid_cx * exi + centroid_cx * centroid_cx;
+        // E[(yi - centroid_cy)^2] = E[yi^2] - 2*centroid_cy*E[yi] + centroid_cy^2
+        double expected_dy2 = eyi2 - 2.0 * centroid_cy * eyi + centroid_cy * centroid_cy;
+
+        sum_expected_sq_dist += expected_dx2 + expected_dy2;
+    }
+
+    // 3. Return the average
+    return sum_expected_sq_dist / group_size;
+}
 double calculate_variance(const std::vector<int>& group) {
     double x_sum = 0, y_sum = 0;
     for (int idx_g : group) {
@@ -373,11 +413,14 @@ double calculate_variance(const std::vector<int>& group) {
     y_sum /= group.size();
 
     double variance = 0;
+    double noise_correction = 0;
     for (int idx_g : group) {
         variance += std::pow(points_xy[idx_g].first - x_sum, 2) + std::pow(points_xy[idx_g].second - y_sum, 2);
         // variance += std::pow(width[idx_g], .5) + std::pow(height[idx_g], .5);
+        // noise_correction += (width[idx_g] * width[idx_g] + height[idx_g] * height[idx_g]) / 12.0;
+
     }
-    return variance / group.size();
+    return (variance-noise_correction) / group.size();
 }
 double compute_all_path_length(const std::vector<int>& group) {
     double total_length = 0;
@@ -403,9 +446,13 @@ int main() {
     int N, M, Q, L;
     cin >> N >> M >> Q >> L >> W;
     // use_estimated_distance = true;
-    if(L==3){
+    if(L==3 or M>=380){
         use_estimated_distance = true;
         cerr<<"use_estimated_distance"<<endl;
+        if(M>=380){
+            use_mst_distance = true;
+            cerr<<"use_mst_distance"<<endl;
+        }
     }
     if(M>100){
         time_limit=1700;
@@ -526,7 +573,7 @@ int main() {
             group_dist_t[group_id] = dist_t;
             // group_all_path_length_t[group_id] = compute_all_path_length(groups_t[group_id]);
             // all_path_length_t += group_all_path_length_t[group_id];
-            group_mst_dist_t[group_id] = compute_mst_length(groups_t[group_id]);
+            group_mst_dist_t[group_id] = compute_mst_distance(groups_t[group_id]);
             mst_dist_t += group_mst_dist_t[group_id];
             // double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit_init;
             // current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
@@ -538,12 +585,12 @@ int main() {
         //     group_var = group_var_t;
         // }
         // dist*variance
-        if(tmp_dist * tmp_var > dist_t*var_t){
-            tmp_dist = dist_t;
-            tmp_var = var_t;
-            groups = groups_t;
-            group_var = group_var_t;
-        }
+        // if(tmp_dist * tmp_var > dist_t*var_t){
+        //     tmp_dist = dist_t;
+        //     tmp_var = var_t;
+        //     groups = groups_t;
+        //     group_var = group_var_t;
+        // }
         // all_path_length
         // if(tmp_all_path_length > all_path_length_t){
         //     tmp_all_path_length = all_path_length_t;
@@ -555,14 +602,14 @@ int main() {
         //     group_all_path_length = group_all_path_length_t;
         // }
         // mst_dist
-        // if(tmp_mst_dist> mst_dist_t){
-        //     tmp_mst_dist = mst_dist_t;
-        //     tmp_var = var_t;
-        //     groups = groups_t;
-        //     group_var = group_var_t;
-        //     group_dist = group_dist_t;
-        //     group_mst_dist = group_mst_dist_t;
-        // }
+        if(tmp_mst_dist> mst_dist_t){
+            tmp_mst_dist = mst_dist_t;
+            tmp_var = var_t;
+            groups = groups_t;
+            group_var = group_var_t;
+            group_dist = group_dist_t;
+            group_mst_dist = group_mst_dist_t;
+        }
 
     }
     cerr<<"tmp_var: " << tmp_var << endl;
@@ -623,18 +670,40 @@ int main() {
         swap(groups[g1][i1], groups[g2][i2]);
         double var1=calculate_variance(groups[g1]);
         double var2=calculate_variance(groups[g2]);
+        double mst1, mst2;
+        if(use_mst_distance){
+            mst1=compute_mst_distance(groups[g1]);
+            mst2=compute_mst_distance(groups[g2]);
+        }
+
 
         // simulate annealing
+        
         double delta= (var1 + var2) - (group_var[g1] + group_var[g2]);
+        if(use_mst_distance){
+            delta=mst1 + mst2 - (group_mst_dist[g1] + group_mst_dist[g2]);
+        }
+        
         
         if (delta < 0 || exp(-delta / current_temperature) > uniform_real_distribution<>(0, 1)(gen)) {
             group_var[g1] = var1;
             group_var[g2] = var2;
             tmp_var += delta;
-            // if (tmp_var < best_var) {
-            //     best_var = tmp_var;
+            if (tmp_var < best_var) {
+                best_var = tmp_var;
+                best_groups = groups;
+            }
+            if(use_mst_distance){
+                group_mst_dist[g1] = mst1;
+                group_mst_dist[g2] = mst2;
+            }
+            
+            // tmp_mst_dist += delta;
+            // if (tmp_mst_dist < best_var) {
+            //     best_var = tmp_mst_dist;
             //     best_groups = groups;
             // }
+
             
         } else {
             // 分散が大きくなったら元に戻す
@@ -654,7 +723,7 @@ int main() {
     for (int k = 0; k < M; ++k) {
         vector<int> group = groups[k];
         edges[k]=compute_mst_edges(group);
-        group_mst_dist[k] = compute_mst_length(group);
+        // group_mst_dist[k] = compute_mst_distance(group);
     }
     map<int,int>id2group;
     for(int i=0;i<M;i++){
@@ -700,7 +769,7 @@ int main() {
         // 重みの合計を計算
         std::vector<double> weights(M);
         for (int i = 0; i < M; ++i) {
-            weights[i] =  sqrt(group_var[i]);
+            weights[i] =  groups[i].size(); 
             if(groups[i].size()<=2) weights[i]=0;
         }
         std::discrete_distribution<> dist(weights.begin(), weights.end());
