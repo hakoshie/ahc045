@@ -39,8 +39,8 @@ template <class T> bool chmin(T &a, const T &b) { if (a > b) { a = b; return 1; 
 
 // Timer
 auto start_time = std::chrono::high_resolution_clock::now();
-const int time_limit_init = 500;
-const int time_limit = 1700;
+const int time_limit_init = 300;
+int time_limit = 1500;
 const int time_limit_final =1900;
 bool LOCAL = false;
 
@@ -170,8 +170,18 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
     // cerr<<"while"<<endl;
     // timer start
     auto start_time = std::chrono::high_resolution_clock::now();
+    int iteration = 0;
     while (true) {
         // check time
+        auto current_time = chrono::high_resolution_clock::now();
+        auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
+        if (duration.count() > time_limit_final) {
+            return {{}, {}};
+        }
+        if(iteration>30){
+            pathLen = max(2, pathLen -1);
+            iteration=5;
+        }
   
         // ランダムな開始点
         uniform_int_distribution<int> dist(0, group.size() - 1);
@@ -204,6 +214,7 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
         if ((int)path.size() >= pathLen + 1) {
             return {path, used_edges}; // 成功したら返す
         }
+        iteration++;
     }
 }
 // Function to compute the MST length
@@ -329,9 +340,15 @@ double compute_all_path_length(const std::vector<int>& group) {
     return total_length;
 }
 int main() {
+    ios::sync_with_stdio(false);
+	cin.tie(nullptr);
     int N, M, Q, L;
     cin >> N >> M >> Q >> L >> W;
-
+    if(M>100){
+        time_limit=1700;
+    }else{
+        time_limit=1200;
+    }
     vector<pair<int,int>> G(M);
     for (int i = 0; i < M; ++i) {
         cin >> G[i].first;
@@ -591,6 +608,7 @@ int main() {
   
     vector<int>nvisit_group(M,0);
     vector<int>fully_visited_group(M,0);
+    vector<int>last_path_length(M,0);
     set<vector<int>> visited;
     // auto group_id= uniform_int_distribution<>(0, M-1)(gen);
     std::vector<double> weights(M);
@@ -617,7 +635,9 @@ int main() {
         auto group=groups[group_id];
         if(group.size()<=2) continue;
         auto [coordinates,used_edges]=generate_random_path(group, edges[group_id], L-1);
-
+        if(coordinates.empty()){
+            break;
+        }
         // cerr<<"coordinates: " << coordinates.size() << endl;
         // for(auto a:coordinates){
         //     cerr<<a << " ";
@@ -625,18 +645,21 @@ int main() {
         // cerr<<endl;
         sort(coordinates.begin(), coordinates.end());
         if(visited.count(coordinates)){
-            int coordinates_size=coordinates.size();
-            auto [coordinates2,used_edges2]=generate_random_path(group, edges[group_id], coordinates_size-2);
-            sort(coordinates2.begin(), coordinates2.end());
-            if(visited.count(coordinates2)){
-                continue;
-            }
-            coordinates=coordinates2;
-            used_edges.clear();
-            used_edges=used_edges2;
+            
+            continue;
+            // auto [coordinates2,used_edges2]=generate_random_path(group, edges[group_id], max(last_path_length[group_id]-1,2));
+            // sort(coordinates2.begin(), coordinates2.end());
+            // if(visited.count(coordinates2)){
+            //     continue;
+            // }
+            // coordinates=coordinates2;
+            // used_edges.clear();
+            // used_edges=used_edges2;
             // visited.insert(coordinates);
         }
+
         visited.insert(coordinates);
+        last_path_length[group_id]=coordinates.size()-1;
         if(coordinates.size()==group.size()){
             fully_visited_group[group_id]++;
         }
