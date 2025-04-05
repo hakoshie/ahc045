@@ -47,10 +47,47 @@ bool LOCAL = false;
 using ll = long long;
 const int Nconst=800;
 int W;
-
+bool use_estimated_distance = false;
 vector<int>width(Nconst);
 vector<int>height(Nconst);
 vector<pair<int, int>> points_xy(Nconst);
+vector<int> lx(Nconst), rx(Nconst), ly(Nconst), ry(Nconst);
+// Function to calculate E[X^2] for X uniformly distributed in [a, b]
+double expected_square(double a, double b) {
+    // Avoid division by zero if a == b
+    if (a == b) {
+        return a * a;
+    }
+    // Use the formula (a^2 + ab + b^2) / 3 derived from (b^3 - a^3) / (3 * (b - a))
+    return (a * a + a * b + b * b) / 3.0;
+}
+
+// Function to estimate E[dist(i, j)] using sqrt(E[d^2])
+double estimate_expected_distance(int i, int j) {
+    // E[xi], E[xj], E[yi], E[yj]
+    double exi = (lx[i] + rx[i]) / 2.0;
+    double eyi = (ly[i] + ry[i]) / 2.0;
+    double exj = (lx[j] + rx[j]) / 2.0;
+    double eyj = (ly[j] + ry[j]) / 2.0;
+
+    // E[xi^2], E[xj^2], E[yi^2], E[yj^2]
+    double exi2 = expected_square(lx[i], rx[i]);
+    double eyi2 = expected_square(ly[i], ry[i]);
+    double exj2 = expected_square(lx[j], rx[j]);
+    double eyj2 = expected_square(ly[j], ry[j]);
+
+    // E[(xi - xj)^2] = E[xi^2] - 2*E[xi]*E[xj] + E[xj^2]
+    double expected_dx2 = exi2 - 2.0 * exi * exj + exj2;
+    // E[(yi - yj)^2] = E[yi^2] - 2*E[yi]*E[yj] + E[yj^2]
+    double expected_dy2 = eyi2 - 2.0 * eyi * eyj + eyj2;
+
+    // E[d^2] = E[(xi - xj)^2] + E[(yi - yj)^2]
+    // Ensure the value inside sqrt is non-negative due to potential floating point inaccuracies
+    double expected_d2 = std::max(0.0, expected_dx2) + std::max(0.0, expected_dy2);
+
+    // E[dist] ≈ sqrt(E[d^2])
+    return std::sqrt(expected_d2);
+}
 // Function to perform a query
 std::set<pii> query(const std::vector<int>& c) {
     if (LOCAL) {
@@ -180,7 +217,7 @@ pair<vector<int>, vector<pair<int, int>>> generate_random_path(
         }
         if(iteration>30){
             pathLen = max(2, pathLen -1);
-            iteration=5;
+            iteration=0;
         }
   
         // ランダムな開始点
@@ -225,8 +262,13 @@ double compute_mst_length(const std::vector<int>& group) {
     for (int i = 0; i < n; ++i) {
         for (int j = i + 1; j < n; ++j) {
             int u = group[i], v = group[j];
-            double dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
-                                     std::pow(points_xy[u].second - points_xy[v].second, 2));
+            double dist;
+            if(use_estimated_distance){
+                dist = estimate_expected_distance(u, v);
+            }else{
+                dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
+                        std::pow(points_xy[u].second - points_xy[v].second, 2));
+            }
             edges.emplace_back(dist, u, v);
         }
     }
@@ -251,8 +293,13 @@ std::vector<int> compute_mst_with_order(const std::vector<int>& group) {
     for (int i = 0; i < n; ++i) {
         for (int j = i + 1; j < n; ++j) {
             int u = group[i], v = group[j];
-            double dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
-                                     std::pow(points_xy[u].second - points_xy[v].second, 2));
+            double dist;
+            if(use_estimated_distance){
+                dist = estimate_expected_distance(u, v);
+            }else{
+                dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
+                        std::pow(points_xy[u].second - points_xy[v].second, 2));
+            }
             edges.emplace_back(dist, u, v);
         }
     }
@@ -288,8 +335,13 @@ std::set<pair<int,int>> compute_mst_edges(const std::vector<int>& group) {
     for (int i = 0; i < n; ++i) {
         for (int j = i + 1; j < n; ++j) {
             int u = group[i], v = group[j];
-            double dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
-                                     std::pow(points_xy[u].second - points_xy[v].second, 2));
+            double dist;
+            if(use_estimated_distance){
+                dist = estimate_expected_distance(u, v);
+            }else{
+                dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
+                        std::pow(points_xy[u].second - points_xy[v].second, 2));
+            }
             edges.emplace_back(dist, u, v);
         }
     }
@@ -332,20 +384,32 @@ double compute_all_path_length(const std::vector<int>& group) {
     for (size_t i = 0; i < group.size(); ++i) {
         for (size_t j = i + 1; j < group.size(); ++j) {
             int u = group[i], v = group[j];
-            double dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
-                                     std::pow(points_xy[u].second - points_xy[v].second, 2));
+            double dist;
+            if(use_estimated_distance){
+                dist = estimate_expected_distance(u, v);
+            }else{
+                dist = std::sqrt(std::pow(points_xy[u].first - points_xy[v].first, 2) +
+                        std::pow(points_xy[u].second - points_xy[v].second, 2));
+            }
             total_length += dist;
         }
     }
     return total_length;
 }
+
 int main() {
     ios::sync_with_stdio(false);
 	cin.tie(nullptr);
     int N, M, Q, L;
     cin >> N >> M >> Q >> L >> W;
+    // use_estimated_distance = true;
+    if(L==3){
+        use_estimated_distance = true;
+        cerr<<"use_estimated_distance"<<endl;
+    }
     if(M>100){
         time_limit=1700;
+        
     }else{
         time_limit=1200;
     }
@@ -355,7 +419,7 @@ int main() {
         G[i].second = i;
     }
     sort(G.begin(), G.end(), greater<pair<int,int>>());
-    vector<int> lx(N), rx(N), ly(N), ry(N);
+    
     for (int i = 0; i < N; ++i) {
         cin >> lx[i] >> rx[i] >> ly[i] >> ry[i];
     }
@@ -437,8 +501,13 @@ int main() {
 
                 for (size_t j = 0; j < remaining_points.size(); ++j) {
                     for (int idx_g : groups_t[group_id]) {
-                        double dist = sqrt(pow(get<0>(remaining_points[j]) -points_xy[idx_g].first, 2) +
-                                        pow(get<1>(remaining_points[j]) -points_xy[idx_g].second, 2));
+                        double dist;
+                        if(use_estimated_distance){
+                            dist = estimate_expected_distance(idx_g, get<2>(remaining_points[j]));
+                        }else{
+                            dist = std::sqrt(std::pow(points_xy[idx_g].first - get<0>(remaining_points[j]), 2) +
+                                    std::pow(points_xy[idx_g].second - get<1>(remaining_points[j]), 2));
+                        }
                         // auto delta= min_dist - dist;
                         // if (dist < min_dist or (delta<2*W*sqrt(2) and .35> uniform_real_distribution<>(0, 1)(gen))) {
                         if (dist < min_dist) {
@@ -457,7 +526,7 @@ int main() {
             group_dist_t[group_id] = dist_t;
             // group_all_path_length_t[group_id] = compute_all_path_length(groups_t[group_id]);
             // all_path_length_t += group_all_path_length_t[group_id];
-            // group_mst_dist_t[group_id] = compute_mst_length(groups_t[group_id]);
+            group_mst_dist_t[group_id] = compute_mst_length(groups_t[group_id]);
             mst_dist_t += group_mst_dist_t[group_id];
             // double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit_init;
             // current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
@@ -540,9 +609,15 @@ int main() {
         int p2 = groups[g2][i2];
         // distanceが2500\sqrt(2)以上ならcontinue
         // double dist = sqrt(pow(get<0>(points_xy[p1]) - get<0>(points_xy[p2]), 2) +
-                        //    pow(get<1>(points_xy[p1]) - get<1>(points_xy[p2]), 2));
-        double dist = sqrt(pow(points_xy[p1].first - points_xy[p2].first, 2) +
-                               pow(points_xy[p1].second - points_xy[p2].second, 2));
+                        //    pow(get<1>(points_xy[p1]) - get<1>(points_xy[p2]), 2))
+        
+        double dist;
+        if(use_estimated_distance){
+            dist = estimate_expected_distance(p1, p2);
+        }else{
+            dist = std::sqrt(std::pow(points_xy[p1].first - points_xy[p2].first, 2) +
+                        std::pow(points_xy[p1].second - points_xy[p2].second, 2));
+        }
         if (dist > 5000) continue;
         // p1, p2をswapして分散を計算する
         swap(groups[g1][i1], groups[g2][i2]);
@@ -579,6 +654,7 @@ int main() {
     for (int k = 0; k < M; ++k) {
         vector<int> group = groups[k];
         edges[k]=compute_mst_edges(group);
+        group_mst_dist[k] = compute_mst_length(group);
     }
     map<int,int>id2group;
     for(int i=0;i<M;i++){
@@ -611,11 +687,7 @@ int main() {
     vector<int>last_path_length(M,0);
     set<vector<int>> visited;
     // auto group_id= uniform_int_distribution<>(0, M-1)(gen);
-    std::vector<double> weights(M);
-    for (int i = 0; i < M; ++i) {
-        weights[i] = groups[i].size(); // グループのサイズを重みとする
-        if(groups[i].size()<=2) weights[i]=0;
-    }
+
     while(num_queries<Q){
         // check time
         auto current_time = chrono::high_resolution_clock::now();
@@ -626,6 +698,11 @@ int main() {
         
     
         // 重みの合計を計算
+        std::vector<double> weights(M);
+        for (int i = 0; i < M; ++i) {
+            weights[i] =  sqrt(group_var[i]);
+            if(groups[i].size()<=2) weights[i]=0;
+        }
         std::discrete_distribution<> dist(weights.begin(), weights.end());
         auto group_id = dist(gen); // 重み付けサンプリングで group_id を選択
         if(fully_visited_group[group_id]>0){
