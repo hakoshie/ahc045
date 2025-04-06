@@ -208,10 +208,16 @@ pair<set<int>,vector<pair<int,int>>>generate_query(const vector<int>&group,set<p
             }
         }
         if(u>v) swap(u,v);
-        vertices.insert(u);
-        vertices.insert(v);
-        mean_x=( mean_x*vertices.size() + points_xy[u].first + points_xy[v].first) / (vertices.size()+2);
-        mean_y=( mean_y*vertices.size() + points_xy[u].second + points_xy[v].second) / (vertices.size()+2);
+        if(vertices.count(u)==0){
+            vertices.insert(u);
+            mean_x=( mean_x*vertices.size() + points_xy[u].first) / (vertices.size()+1);
+            mean_y=( mean_y*vertices.size() + points_xy[u].second) / (vertices.size()+1);
+        }
+        if(vertices.count(v)==0){
+            vertices.insert(v);
+            mean_x=( mean_x*vertices.size() + points_xy[v].first) / (vertices.size()+1);
+            mean_y=( mean_y*vertices.size() + points_xy[v].second) / (vertices.size()+1);
+        }
         edges.erase({u,v});
         erased.push_back({u,v});
     }
@@ -663,6 +669,9 @@ int main() {
     auto best_groups = groups;
     auto best_group_var = group_var;
     auto best_var = tmp_var;
+    auto best_mst_dist = tmp_mst_dist;
+    const int annealing_stop_threshold_ms = 800; // 200ミリ秒改善がなければ停止
+    auto last_update_time = chrono::high_resolution_clock::now();
 
     vector<int>weight(M);
     // vector<int>weight2(M);
@@ -673,14 +682,22 @@ int main() {
     // 重みづけサンプリング
     discrete_distribution<> dist_g1(weight.begin(), weight.end());
     // discrete_distribution<> dist_g2(weight2.begin(), weight2.end());
+    // --- 焼きなましループの前 ---
+    const double accept_rate_threshold = 0.01; // 受理率1%未満で停止
     while(1) {
         // check time
+        // trial_count++;
         auto current_time = chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
         if (duration.count() > time_limit) {
             break;
         }
-
+        // 改善停滞チェック
+        auto time_since_last_update = chrono::duration_cast<chrono::milliseconds>(current_time - last_update_time);
+        if (time_since_last_update.count() > annealing_stop_threshold_ms) {
+            cerr << "Annealing stopped due to stagnation at " << duration.count() << " ms" << endl;
+            break; // 打ち切り
+        }
         int g1 = uniform_int_distribution<>(0, M - 1)(gen);
         // int g1 = dist_g1(gen);
         int g2 = uniform_int_distribution<>(0, M - 1)(gen);
@@ -728,9 +745,11 @@ int main() {
             group_var[g1] = var1;
             group_var[g2] = var2;
             tmp_var += delta;
+            // accept_count++;
             if (tmp_var < best_var) {
                 best_var = tmp_var;
                 best_groups = groups;
+                last_update_time = current_time; // 最後の更新時間を更新
             }
             if(use_mst_distance){
                 group_mst_dist[g1] = mst1;
@@ -750,12 +769,28 @@ int main() {
         }
         double progress = (double) std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time).count() / (double) time_limit;
         current_temperature =std::pow(start_temperature, 1.0 - progress) * std::pow(end_temperature, progress);
+            // 温度閾値チェック
+        const double temp_stop_threshold = 1e-5; // 例: 非常に低い温度
+        if (current_temperature < temp_stop_threshold) {
+            cerr << "Annealing stopped due to low temperature at " << duration.count() << " ms" << endl;
+            break; // 打ち切り
+        }
+        // if (trial_count % check_interval == 0 && trial_count > 0) {
+        //     double current_accept_rate = (double)accept_count / check_interval;
+        //     if (current_accept_rate < accept_rate_threshold) {
+        //         cerr << "Annealing stopped due to low acceptance rate at " << duration.count() << " ms" << endl;
+        //         break; // 打ち切り
+        //     }
+        //     // カウンタリセット
+        //     // accept_count = 0;
+        //     // trial_count はリセットしない or するかは設計による
+        // }
 
     }
-    // groups = best_groups;
+    groups = best_groups;
     // Get edges from queries
     vector<set<pair<int, int>>> edges(M);
-    atcoder::dsu uf(800);
+    // atcoder::dsu uf(800);
     int num_queries = 0;
     vector<int> candidate_cities;
     // compute edges
@@ -764,29 +799,29 @@ int main() {
         edges[k]=compute_mst_edges(group);
         // group_mst_dist[k] = compute_mst_distance(group);
     }
-    map<int,int>id2group;
-    for(int i=0;i<M;i++){
-        for(auto a:groups[i]){
-            id2group[a]=i;
-        }
-    }
-    vector<set<int>> connection(N);
-    rep(i,M){
-        for(auto [a,b]:edges[i]){
-            assert(a<=N);
-            if(a>=N){
-                cerr<<"a: " << a << endl;
-            }
-            connection[a].insert(b);
+    // map<int,int>id2group;
+    // for(int i=0;i<M;i++){
+    //     for(auto a:groups[i]){
+    //         id2group[a]=i;
+    //     }
+    // }
+    // vector<set<int>> connection(N);
+    // rep(i,M){
+    //     for(auto [a,b]:edges[i]){
+    //         assert(a<=N);
+    //         if(a>=N){
+    //             cerr<<"a: " << a << endl;
+    //         }
+    //         connection[a].insert(b);
             
-            assert(b<=N);
-            if(b>=N){
-                cerr<<"b: " << b << endl;
-            }
-            connection[b].insert(a);
+    //         assert(b<=N);
+    //         if(b>=N){
+    //             cerr<<"b: " << b << endl;
+    //         }
+    //         connection[b].insert(a);
          
-        }
-    }
+    //     }
+    // }
     cerr<<"done"<<endl;
     // グループのサイズを基に重み付けサンプリング
   
@@ -799,7 +834,7 @@ int main() {
     vector<pair<int,int>>last_failed(M,{1e9,0});
     // auto group_id= uniform_int_distribution<>(0, M-1)(gen);
 
-    int visited_streak=0;
+    // int visited_streak=0;
     std::vector<double> weights(M);
     for (int i = 0; i < M; ++i) {
         weights[i] =  groups[i].size();
@@ -824,10 +859,7 @@ int main() {
         auto group=groups[group_id];
         if(group.size()<=2) continue;
         int pathLen = min(L-1, (int)group.size()-1);
-        if(last_failed[group_id].first==pathLen and last_failed[group_id].second>15){
-            pathLen = max(2, pathLen -1);
-            last_failed[group_id].second=0;
-        }
+        // if(last_failed[group_id].second>15)continue;
         auto [coordinates, erased]=generate_query(groups[group_id], edges[group_id], pathLen);
         // cerr<<"coordinates length: " << coordinates.size() << endl;
         // for(auto a:coordinates){
@@ -847,6 +879,8 @@ int main() {
             last_failed[group_id].first=coordinates.size()-1;
             last_failed[group_id].second++;
             continue;
+        }else{
+            last_failed[group_id].second=0;
         }
         visited_coordinates[coordinates]++;
         auto new_edges=query(coordinates);
