@@ -90,14 +90,8 @@ double estimate_expected_distance(int i, int j) {
     return std::sqrt(expected_d2);
 }
 // Function to perform a query
-std::set<pii> query(const std::vector<int>& c) {
-    if (LOCAL) {
-        std::set<pii> result;
-        for (size_t i = 0; i < c.size() - 1; ++i) {
-            result.insert({c[i], c[i + 1]});
-        }
-        return result;
-    }
+std::set<pii> query(const std::set<int>& c) {
+
 
     std::cout << "? " << c.size();
     for (int val : c) {
@@ -177,6 +171,51 @@ int tree_diameter(const vector<int>& group, const set<pair<int, int>>& edges) {
     int start = group[0];
     int farthest = bfs_farthest(start).first;
     return bfs_farthest(farthest).second;
+}
+pair<set<int>,vector<pair<int,int>>>generate_query(const vector<int>&group,set<pair<int,int>>&edges, int pathLen) {
+    set<int>vertices;
+    vector<pair<int,int>>erased;
+    random_device rd;
+    mt19937 gen(rd());
+
+    // 近くの辺を優先的に選ぶ
+    uniform_int_distribution<int> dist(0, edges.size() - 1);
+    int idx=dist(gen);
+    auto [u,v]=*next(edges.begin(),idx);
+    double mean_x=0;
+    double mean_y=0;
+    vertices.insert(u);
+    vertices.insert(v);
+    mean_x+=points_xy[u].first;
+    mean_y+=points_xy[u].second;
+    mean_x+=points_xy[v].first;
+    mean_y+=points_xy[v].second;
+    mean_x/=2;
+    mean_y/=2;
+    edges.erase({u,v});
+    erased.push_back({u,v});
+    while(vertices.size() < pathLen + 1) {
+        double min_dist = 1e9;
+        for(auto [a,b]:edges){
+            int rest=pathLen+1-vertices.size();
+            int delta = (vertices.count(a)==0) + (vertices.count(b)==0);
+            if(delta>rest)continue;
+            double dist = sqrt(pow(points_xy[a].first - mean_x, 2) + pow(points_xy[a].second - mean_y, 2));
+            if (dist < min_dist) {
+                min_dist = dist;
+                u=a;
+                v=b;
+            }
+        }
+        if(u>v) swap(u,v);
+        vertices.insert(u);
+        vertices.insert(v);
+        mean_x=( mean_x*vertices.size() + points_xy[u].first + points_xy[v].first) / (vertices.size()+2);
+        mean_y=( mean_y*vertices.size() + points_xy[u].second + points_xy[v].second) / (vertices.size()+2);
+        edges.erase({u,v});
+        erased.push_back({u,v});
+    }
+    return {vertices, erased};
 }
 // ランダムな長さ L のパスを生成
 pair<vector<int>, vector<pair<int, int>>> generate_random_path(
@@ -754,71 +793,111 @@ int main() {
     vector<int>nvisit_group(M,0);
     vector<int>fully_visited_group(M,0);
     vector<int>last_path_length(M,0);
-    set<vector<int>> visited;
+    
+    // map<set<int>, int> visited;
+    map<set<int>, int> visited_coordinates;
     // auto group_id= uniform_int_distribution<>(0, M-1)(gen);
-
+    std::vector<double> weights(M);
+    for (int i = 0; i < M; ++i) {
+        weights[i] =  groups[i].size(); 
+        if(groups[i].size()<=2) weights[i]=0;
+    }
+    discrete_distribution<> dist(weights.begin(), weights.end());
+    int visited_streak=0;
     while(num_queries<Q){
+        cerr<<"trial: " << num_queries << endl;
         // check time
         auto current_time = chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
         if (duration.count() > time_limit_final) {
             break;
         }
-        
-    
-        // 重みの合計を計算
-        std::vector<double> weights(M);
-        for (int i = 0; i < M; ++i) {
-            weights[i] =  groups[i].size(); 
-            if(groups[i].size()<=2) weights[i]=0;
-        }
-        std::discrete_distribution<> dist(weights.begin(), weights.end());
         auto group_id = dist(gen); // 重み付けサンプリングで group_id を選択
-        if(fully_visited_group[group_id]>0){
-            continue;
-        }
-        nvisit_group[group_id]++;
+        cerr<<"group_id: " << group_id << endl;
         auto group=groups[group_id];
         if(group.size()<=2) continue;
-        auto [coordinates,used_edges]=generate_random_path(group, edges[group_id], L-1);
-        if(coordinates.empty()){
-            break;
-        }
-        // cerr<<"coordinates: " << coordinates.size() << endl;
+        auto [coordinates, erased]=generate_query(groups[group_id], edges[group_id], min(L-1, (int)group.size()-1));
+        // cerr<<"coordinates length: " << coordinates.size() << endl;
         // for(auto a:coordinates){
-        //     cerr<<a << " ";
+        //     cerr<<a<< " ";
         // }
         // cerr<<endl;
-        sort(coordinates.begin(), coordinates.end());
-        if(visited.count(coordinates)){
-            
-            continue;
-            // auto [coordinates2,used_edges2]=generate_random_path(group, edges[group_id], max(last_path_length[group_id]-1,2));
-            // sort(coordinates2.begin(), coordinates2.end());
-            // if(visited.count(coordinates2)){
-            //     continue;
-            // }
-            // coordinates=coordinates2;
-            // used_edges.clear();
-            // used_edges=used_edges2;
-            // visited.insert(coordinates);
-        }
+        if(coordinates.size()<=2) continue;
 
-        visited.insert(coordinates);
-        last_path_length[group_id]=coordinates.size()-1;
-        if(coordinates.size()==group.size()){
-            fully_visited_group[group_id]++;
+        if(visited_coordinates[coordinates]>0){
+            cerr<<"visited"<<" num_queries: " << num_queries << endl;
+            visited_streak++;
+            for(auto [u,v]:erased){
+                edges[group_id].insert({u,v});
+            }
+            continue;
+        }else{
+            visited_streak=0;
         }
-        for(auto [u,v]:used_edges){
-            edges[group_id].erase({u,v});
+        visited_coordinates[coordinates]++;
+        auto new_edges=query(coordinates);
+
+        atcoder::dsu uf(800);
+        for(auto [u,v]:edges[group_id]){
+            uf.merge(u,v);
         }
-        auto ret=query(coordinates);
-        for(auto [u,v]:ret){
+        for(auto [u,v]:new_edges){
+            if(u>v) swap(u,v);
+            if(uf.same(u,v)) continue;
             edges[group_id].insert({u,v});
         }
-
         num_queries++;
+
     }
+    // while(num_queries<Q){
+    //     // check time
+    //     auto current_time = chrono::high_resolution_clock::now();
+    //     auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
+    //     if (duration.count() > time_limit_final) {
+    //         break;
+    //     }
+        
+    
+    //     // 重みの合計を計算
+    //     std::vector<double> weights(M);
+    //     for (int i = 0; i < M; ++i) {
+    //         weights[i] =  groups[i].size(); 
+    //         if(groups[i].size()<=2) weights[i]=0;
+    //     }
+    //     std::discrete_distribution<> dist(weights.begin(), weights.end());
+    //     auto group_id = dist(gen); // 重み付けサンプリングで group_id を選択
+    //     if(fully_visited_group[group_id]>0){
+    //         continue;
+    //     }
+    //     nvisit_group[group_id]++;
+    //     auto group=groups[group_id];
+    //     if(group.size()<=2) continue;
+    //     auto [coordinates,used_edges]=generate_random_path(group, edges[group_id], L-1);
+    //     if(coordinates.empty()){
+    //         break;
+    //     }
+
+    //     sort(coordinates.begin(), coordinates.end());
+    //     if(visited.count(coordinates)){
+            
+    //         continue;
+    //     }
+
+    //     visited.insert(coordinates);
+    //     last_path_length[group_id]=coordinates.size()-1;
+    //     if(coordinates.size()==group.size()){
+    //         fully_visited_group[group_id]++;
+    //     }
+    //     for(auto [u,v]:used_edges){
+    //         edges[group_id].erase({u,v});
+    //     }
+    //     auto ret=query(coordinates);
+    //     for(auto [u,v]:ret){
+    //         edges[group_id].insert({u,v});
+    //     }
+
+    //     num_queries++;
+    // }
     answer(groups, edges);
     cerr<<"Queries: " << num_queries << endl;
     return 0;
