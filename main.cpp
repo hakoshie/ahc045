@@ -790,49 +790,63 @@ int main() {
     cerr<<"done"<<endl;
     // グループのサイズを基に重み付けサンプリング
   
-    vector<int>nvisit_group(M,0);
+    vector<int>nvisit(M,0);
     vector<int>fully_visited_group(M,0);
     vector<int>last_path_length(M,0);
     
     // map<set<int>, int> visited;
     map<set<int>, int> visited_coordinates;
+    vector<pair<int,int>>last_failed(M,{1e9,0});
     // auto group_id= uniform_int_distribution<>(0, M-1)(gen);
+
+    int visited_streak=0;
     std::vector<double> weights(M);
     for (int i = 0; i < M; ++i) {
-        weights[i] =  groups[i].size(); 
+        weights[i] =  groups[i].size();
         if(groups[i].size()<=2) weights[i]=0;
     }
     discrete_distribution<> dist(weights.begin(), weights.end());
-    int visited_streak=0;
     while(num_queries<Q){
-        cerr<<"trial: " << num_queries << endl;
+        // cerr<<"trial: " << num_queries << endl;
         // check time
         auto current_time = chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
         if (duration.count() > time_limit_final) {
             break;
         }
+
+        
         auto group_id = dist(gen); // 重み付けサンプリングで group_id を選択
-        cerr<<"group_id: " << group_id << endl;
+        if(fully_visited_group[group_id]>0){
+            continue;
+        }
+        // cerr<<"group_id: " << group_id << endl;
         auto group=groups[group_id];
         if(group.size()<=2) continue;
-        auto [coordinates, erased]=generate_query(groups[group_id], edges[group_id], min(L-1, (int)group.size()-1));
+        int pathLen = min(L-1, (int)group.size()-1);
+        if(last_failed[group_id].first==pathLen and last_failed[group_id].second>15){
+            pathLen = max(2, pathLen -1);
+            last_failed[group_id].second=0;
+        }
+        auto [coordinates, erased]=generate_query(groups[group_id], edges[group_id], pathLen);
         // cerr<<"coordinates length: " << coordinates.size() << endl;
         // for(auto a:coordinates){
         //     cerr<<a<< " ";
         // }
         // cerr<<endl;
         if(coordinates.size()<=2) continue;
-
+        if(coordinates.size()==group.size()){
+            fully_visited_group[group_id]++;
+        }
         if(visited_coordinates[coordinates]>0){
-            cerr<<"visited"<<" num_queries: " << num_queries << endl;
-            visited_streak++;
+            // cerr<<"visited"<<" num_queries: " << num_queries << endl;
+            
             for(auto [u,v]:erased){
                 edges[group_id].insert({u,v});
             }
+            last_failed[group_id].first=coordinates.size()-1;
+            last_failed[group_id].second++;
             continue;
-        }else{
-            visited_streak=0;
         }
         visited_coordinates[coordinates]++;
         auto new_edges=query(coordinates);
