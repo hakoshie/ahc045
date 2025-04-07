@@ -172,57 +172,86 @@ int tree_diameter(const vector<int>& group, const set<pair<int, int>>& edges) {
     int farthest = bfs_farthest(start).first;
     return bfs_farthest(farthest).second;
 }
-pair<set<int>,vector<pair<int,int>>>generate_query(const vector<int>&group,set<pair<int,int>>&edges, int pathLen) {
-    set<int>vertices;
-    vector<pair<int,int>>erased;
+
+// --- generate_query (edges を直接変更するバージョン) ---
+pair<set<int>, vector<pair<int, int>>> generate_query(
+    const vector<int>& group,
+    set<pair<int, int>>& edges, // ★参照渡しで直接変更
+    int L_limit) // pathLen -> L_limit に変更 (整合性のため)
+{
+    set<int> vertices_in_query;
+    vector<pair<int, int>> erased; // この呼び出しで削除された辺のリスト
     random_device rd;
     mt19937 gen(rd());
 
-    // 近くの辺を優先的に選ぶ
-    uniform_int_distribution<int> dist(0, edges.size() - 1);
-    int idx=dist(gen);
-    auto [u,v]=*next(edges.begin(),idx);
-    double mean_x=0;
-    double mean_y=0;
-    vertices.insert(u);
-    vertices.insert(v);
-    mean_x+=points_xy[u].first;
-    mean_y+=points_xy[u].second;
-    mean_x+=points_xy[v].first;
-    mean_y+=points_xy[v].second;
-    mean_x/=2;
-    mean_y/=2;
-    edges.erase({u,v});
-    erased.push_back({u,v});
-    while(vertices.size() < pathLen + 1) {
-        double min_dist = 1e9;
-        for(auto [a,b]:edges){
-            int rest=pathLen+1-vertices.size();
-            int delta = (vertices.count(a)==0) + (vertices.count(b)==0);
-            if(delta>rest)continue;
-            double dist = sqrt(pow(points_xy[a].first - mean_x, 2) + pow(points_xy[a].second - mean_y, 2));
-            if (dist < min_dist) {
-                min_dist = dist;
-                u=a;
-                v=b;
-            }
+    if (edges.empty() || group.size() < 2) {
+        uniform_int_distribution<int> dist_group(0, group.size() - 1);
+        while (vertices_in_query.size() < L_limit + 1 && vertices_in_query.size() < group.size()) {
+            vertices_in_query.insert(group[dist_group(gen)]);
         }
-        if(u>v) swap(u,v);
-        if(vertices.count(u)==0){
-            vertices.insert(u);
-            mean_x=( mean_x*vertices.size() + points_xy[u].first) / (vertices.size()+1);
-            mean_y=( mean_y*vertices.size() + points_xy[u].second) / (vertices.size()+1);
-        }
-        if(vertices.count(v)==0){
-            vertices.insert(v);
-            mean_x=( mean_x*vertices.size() + points_xy[v].first) / (vertices.size()+1);
-            mean_y=( mean_y*vertices.size() + points_xy[v].second) / (vertices.size()+1);
-        }
-        edges.erase({u,v});
-        erased.push_back({u,v});
+        return {vertices_in_query, erased}; // 辺は削除されていない
     }
-    return {vertices, erased};
+
+    // 1. 初期辺選択
+    uniform_int_distribution<int> dist_edge(0, edges.size() - 1);
+    auto it = next(edges.begin(), dist_edge(gen));
+    int u_start = it->first;
+    int v_start = it->second;
+    pair<int, int> initial_edge = *it;
+
+    vertices_in_query.insert(u_start);
+    vertices_in_query.insert(v_start);
+    edges.erase(it); // ★元の edges から直接削除
+    erased.push_back(initial_edge);
+
+    double sum_x = points_xy[u_start].first + points_xy[v_start].first;
+    double sum_y = points_xy[u_start].second + points_xy[v_start].second;
+
+    // 2. 辺を追加していくループ
+    while(vertices_in_query.size() < L_limit + 1 && vertices_in_query.size() < group.size()) {
+         if (edges.empty()) break;
+
+         double current_mean_x = sum_x / vertices_in_query.size();
+         double current_mean_y = sum_y / vertices_in_query.size();
+         double min_dist_sq = 1e18;
+         set<pii>::iterator best_edge_it = edges.end();
+
+         for (auto edge_it = edges.begin(); edge_it != edges.end(); ++edge_it) {
+             int u = edge_it->first;
+             int v = edge_it->second;
+             int needed = (vertices_in_query.count(u) == 0) + (vertices_in_query.count(v) == 0);
+             if (vertices_in_query.size() + needed > L_limit + 1) continue;
+
+             double edge_mid_x = (points_xy[u].first + points_xy[v].first) / 2.0;
+             double edge_mid_y = (points_xy[u].second + points_xy[v].second) / 2.0;
+             double dx = edge_mid_x - current_mean_x;
+             double dy = edge_mid_y - current_mean_y;
+             double dist_sq = dx * dx + dy * dy;
+             double delta= dist_sq - min_dist_sq;
+             if (dist_sq < min_dist_sq  or (uniform_real_distribution<double>(0, 1)(gen) < 0.05 and delta<2*W*sqrt(2))) {
+                 min_dist_sq = dist_sq;
+                 best_edge_it = edge_it;
+             }
+         }
+
+         if (best_edge_it == edges.end()) break;
+
+         int best_u = best_edge_it->first;
+         int best_v = best_edge_it->second;
+         pair<int, int> edge_to_remove = *best_edge_it;
+
+         bool added_u = vertices_in_query.insert(best_u).second;
+         bool added_v = vertices_in_query.insert(best_v).second;
+         if (added_u) { sum_x += points_xy[best_u].first; sum_y += points_xy[best_u].second; }
+         if (added_v) { sum_x += points_xy[best_v].first; sum_y += points_xy[best_v].second; }
+
+         edges.erase(best_edge_it); // ★元の edges から直接削除
+         erased.push_back(edge_to_remove);
+    }
+
+    return {vertices_in_query, erased};
 }
+
 // ランダムな長さ L のパスを生成
 pair<vector<int>, vector<pair<int, int>>> generate_random_path(
     const vector<int>& group, const set<pair<int, int>>& edges, int pathLen) {
@@ -558,7 +587,7 @@ int main() {
     random_device rd;
     mt19937 gen(rd());
     // 以下を10回繰り返して最もvarianceが小さくなるようにする
-    for(int trial=0;trial<100;trial++){
+    for(int trial=0;trial<1000;trial++){
         // check time
         auto current_time = chrono::high_resolution_clock::now();
         auto duration = chrono::duration_cast<chrono::milliseconds>(current_time - start_time);
